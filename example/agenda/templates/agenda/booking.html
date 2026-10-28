@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>{{ booking }}</title></head>
+  <body>
+    <h1>{{ booking }}</h1>
+    <p>{{ booking.room }}: {{ booking.start }} – {{ booking.end }}</p>
+    <p><a href="{% url 'calendar' %}">Back to the calendar</a></p>
+  </body>
+</html>
