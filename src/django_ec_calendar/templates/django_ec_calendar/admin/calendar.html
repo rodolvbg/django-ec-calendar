@@ -5,7 +5,7 @@
 
 {% block extrahead %}{{ block.super }}{{ media.js }}{% endblock %}
 
-{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-list django-event-calendar-page{% endblock %}
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-list django-ec-calendar-page{% endblock %}
 
 {% block breadcrumbs %}
   {% if breadcrumbs_list %}
@@ -43,6 +43,6 @@
         {% endif %}
       </ul>
     {% endif %}
-    {% include "django_event_calendar/calendar.html" with id="django-event-calendar" config=calendar %}
+    {% include "django_ec_calendar/calendar.html" with id="django-ec-calendar" config=calendar %}
   </div>
 {% endblock content %}

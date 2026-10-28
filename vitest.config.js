@@ -8,7 +8,7 @@ export default defineConfig({
             provider: "v8",
             reporter: [["text", { skipFull: true }]],
             include: [
-                "src/django_event_calendar/static/django_event_calendar/**/*.js",
+                "src/django_ec_calendar/static/django_ec_calendar/**/*.js",
             ],
             exclude: ["**/vendor/**"],
         },

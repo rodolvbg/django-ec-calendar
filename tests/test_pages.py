@@ -1,4 +1,4 @@
-"""EventFeedView and {% event_calendar %}: a calendar on your own pages."""
+"""EventFeedView and {% ec_calendar %}: a calendar on your own pages."""
 
 import datetime
 import json
@@ -11,7 +11,7 @@ from django.template import Context, Template
 from django.test import RequestFactory
 from django.urls import reverse
 
-from django_event_calendar import EventFeedView
+from django_ec_calendar import EventFeedView
 
 MADRID = zoneinfo.ZoneInfo("Europe/Madrid")
 
@@ -68,8 +68,8 @@ def test_without_get_absolute_url(call):
 def test_the_page(client, call):
     html = client.get(reverse("calendar")).content.decode()
     assert "event-calendar.min.css" in html
-    assert "django_event_calendar/calendar.js" in html
-    element = re.search(r'data-django-event-calendar="([^"]+)"', html).group(1)
+    assert "django_ec_calendar/calendar.js" in html
+    element = re.search(r'data-django-ec-calendar="([^"]+)"', html).group(1)
     data = json.loads(
         re.search(
             rf'<script id="{element}" type="application/json">(.*?)</script>', html
@@ -85,7 +85,7 @@ def test_the_page(client, call):
 
 def test_its_own_id_and_no_views():
     template = Template(
-        '{% load event_calendar %}{% event_calendar "/events/" id="mine" views="" %}'
+        '{% load ec_calendar %}{% ec_calendar "/events/" id="mine" views="" %}'
     )
     html = template.render(Context({"request": RequestFactory().get("/")}))
     assert 'id="mine"' in html
@@ -101,7 +101,7 @@ def test_its_own_id_and_no_views():
 def test_the_sites_time_zone(settings):
     from django.utils import timezone
 
-    from django_event_calendar.config import site_time_zone
+    from django_ec_calendar.config import site_time_zone
 
     with timezone.override("Asia/Kolkata"):
         assert site_time_zone() == "+05:30"

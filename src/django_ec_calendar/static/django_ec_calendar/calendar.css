@@ -1,9 +1,9 @@
-/* django-event-calendar: EventCalendar in the colors of the page around it
+/* django-ec-calendar: EventCalendar in the colors of the page around it
    — Django's admin (--secondary, --body-bg…), Unfold (--color-primary-600,
    --color-base-…) — on its background, light or dark (calendar.js sets
    ec-dark, or ec-auto-dark for the system's). */
 
-.django-event-calendar .ec {
+.django-ec-calendar .ec {
     --ec-bg-color: transparent;
     --ec-popup-bg-color: var(--body-bg, #fff);
     --ec-event-bg-color: var(
@@ -16,7 +16,7 @@
     --ec-button-active-text-color: #fff;
 }
 
-.django-event-calendar.ec-dark .ec {
+.django-ec-calendar.ec-dark .ec {
     --ec-popup-bg-color: var(--body-bg, var(--color-base-900, #1f2937));
     --ec-border-color: var(--color-base-700, var(--hairline-color, #3f3f46));
     /* Today: a tint of the events' color, not EventCalendar's brown. */
@@ -28,7 +28,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-    .django-event-calendar.ec-auto-dark .ec {
+    .django-ec-calendar.ec-auto-dark .ec {
         --ec-popup-bg-color: var(--body-bg, var(--color-base-900, #1f2937));
         --ec-today-bg-color: color-mix(
             in oklab,
@@ -39,7 +39,7 @@
 }
 
 /* Its titles are headings: not the page's (the admin's h4). */
-.django-event-calendar .ec-event-title {
+.django-ec-calendar .ec-event-title {
     margin: 0;
     color: inherit;
     font: inherit;
@@ -47,7 +47,7 @@
 }
 
 /* What can't be saved, and why: over the calendar. */
-.django-event-calendar-status {
+.django-ec-calendar-status {
     margin: 0 0 0.75rem;
     padding: 0.5rem 0.75rem;
     border-radius: 6px;
@@ -55,12 +55,12 @@
     color: var(--error-fg, oklch(50.5% 0.213 27.518));
 }
 
-.django-event-calendar-status[hidden] {
+.django-ec-calendar-status[hidden] {
     display: none;
 }
 
 /* The admin's page: room for the object tools above it. */
-.django-event-calendar-page #content-main .object-tools {
+.django-ec-calendar-page #content-main .object-tools {
     float: none;
     display: flex;
     justify-content: flex-end;

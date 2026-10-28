@@ -1,8 +1,8 @@
-# Spanish translation of django-event-calendar.
+# Spanish translation of django-ec-calendar.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: django-event-calendar 0.1.0\n"
+"Project-Id-Version: django-ec-calendar 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-10-29 10:00+0000\n"
 "PO-Revision-Date: 2026-10-29 10:00+0100\n"
@@ -76,7 +76,7 @@ msgstr "Guardando…"
 msgid "Not saved"
 msgstr "No se guardó"
 
-#: templates/django_event_calendar/admin/calendar.html
-#: templates/django_event_calendar/admin/change_list.html
+#: templates/django_ec_calendar/admin/calendar.html
+#: templates/django_ec_calendar/admin/change_list.html
 msgid "Calendar"
 msgstr "Calendario"

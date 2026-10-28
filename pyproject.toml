@@ -3,7 +3,7 @@ build-backend = "hatchling.build"
 requires = [ "hatch-fancy-pypi-readme", "hatchling" ]
 
 [project]
-name = "django-event-calendar"
+name = "django-ec-calendar"
 version = "0.1.0"
 description = """\
   A calendar for the Django admin and your pages, with EventCalendar: the changelist's objects by date, opened with a \
@@ -49,9 +49,9 @@ optional-dependencies.dev = [
   "tox>=4",
   "tox-uv>=1",
 ]
-urls.Homepage = "https://github.com/rodolvbg/django-event-calendar"
-urls.Issues = "https://github.com/rodolvbg/django-event-calendar/issues"
-urls.Repository = "https://github.com/rodolvbg/django-event-calendar"
+urls.Homepage = "https://github.com/rodolvbg/django-ec-calendar"
+urls.Issues = "https://github.com/rodolvbg/django-ec-calendar/issues"
+urls.Repository = "https://github.com/rodolvbg/django-ec-calendar"
 
 [dependency-groups]
 dev = [
@@ -75,15 +75,15 @@ dev = [
 # default branch, whatever its name.
 metadata.hooks.fancy-pypi-readme.content-type = "text/markdown"
 metadata.hooks.fancy-pypi-readme.fragments = [ { path = "README.md" } ]
-build.targets.wheel.packages = [ "src/django_event_calendar" ]
+build.targets.wheel.packages = [ "src/django_ec_calendar" ]
 
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
 pattern = '\]\((docs/[^)\s]+\.(?:png|jpe?g|gif|svg|webp))\)'
-replacement = '](https://raw.githubusercontent.com/rodolvbg/django-event-calendar/HEAD/\1)'
+replacement = '](https://raw.githubusercontent.com/rodolvbg/django-ec-calendar/HEAD/\1)'
 
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
 pattern = '\]\(((?:docs/|CHANGELOG|CONTRIBUTING|LICENSE)[^)\s]*)\)'
-replacement = '](https://github.com/rodolvbg/django-event-calendar/blob/HEAD/\1)'
+replacement = '](https://github.com/rodolvbg/django-ec-calendar/blob/HEAD/\1)'
 
 [tool.ruff]
 target-version = "py310"
@@ -120,12 +120,12 @@ django_settings_module = "example.settings"
 [tool.pytest]
 ini_options.testpaths = [ "tests" ]
 ini_options.pythonpath = [ "src", "example", "." ]
-ini_options.addopts = "--no-migrations --cov=django_event_calendar --cov-report=term-missing"
+ini_options.addopts = "--no-migrations --cov=django_ec_calendar --cov-report=term-missing"
 ini_options.DJANGO_SETTINGS_MODULE = "tests.settings"
 
 [tool.coverage]
 run.branch = true
-run.source = [ "django_event_calendar" ]
+run.source = [ "django_ec_calendar" ]
 report.show_missing = true
 report.skip_covered = true
 

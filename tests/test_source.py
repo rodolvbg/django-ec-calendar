@@ -9,8 +9,8 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import RequestFactory
 from django.utils import timezone
 
-from django_event_calendar import CalendarSource
-from django_event_calendar.source import parse_moment
+from django_ec_calendar import CalendarSource
+from django_ec_calendar.source import parse_moment
 
 MADRID = zoneinfo.ZoneInfo("Europe/Madrid")
 

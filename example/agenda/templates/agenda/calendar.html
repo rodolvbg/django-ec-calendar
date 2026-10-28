@@ -1,16 +1,16 @@
-{% load event_calendar %}
+{% load ec_calendar %}
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Bookings</title>
-    {% event_calendar_media %}
+    {% ec_calendar_media %}
     <style>body { font-family: system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }</style>
   </head>
   <body>
     <h1>Bookings</h1>
     {% url "booking-events" as events %}
-    {% event_calendar events view="timeGridWeek" views="dayGridMonth timeGridWeek listWeek" slotMinTime="07:00" %}
+    {% ec_calendar events view="timeGridWeek" views="dayGridMonth timeGridWeek listWeek" slotMinTime="07:00" %}
   </body>
 </html>

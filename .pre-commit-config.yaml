@@ -53,7 +53,7 @@ repos:
     types: [python]
     files: ^(src|example)/
     pass_filenames: false
-    args: [src/django_event_calendar, example]
+    args: [src/django_ec_calendar, example]
 
 # Only needed if the library ships Django templates (src/<pkg>/templates/).
 # Remove this hook if it doesn't.

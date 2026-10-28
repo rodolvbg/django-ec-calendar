@@ -8,7 +8,7 @@ import pytest
 
 # Catalogs appear once the package ships a locale/ dir; until then these
 # tests have nothing to parametrize over and are skipped.
-LOCALE_DIR = Path(__file__).parent.parent / "src/django_event_calendar/locale"
+LOCALE_DIR = Path(__file__).parent.parent / "src/django_ec_calendar/locale"
 CATALOGS = sorted(LOCALE_DIR.glob("*/LC_MESSAGES/django.po"))
 
 

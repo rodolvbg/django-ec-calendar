@@ -1,11 +1,11 @@
-# django-event-calendar
+# django-ec-calendar
 
-[![Python tests](https://github.com/rodolvbg/django-event-calendar/actions/workflows/pytest.yml/badge.svg)](https://github.com/rodolvbg/django-event-calendar/actions/workflows/pytest.yml)
-[![JavaScript tests](https://github.com/rodolvbg/django-event-calendar/actions/workflows/js-tests.yml/badge.svg)](https://github.com/rodolvbg/django-event-calendar/actions/workflows/js-tests.yml)
-[![Current version on PyPI](https://img.shields.io/pypi/v/django-event-calendar.svg)](https://pypi.org/project/django-event-calendar/)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/django-event-calendar)](https://pypi.org/project/django-event-calendar/)
-[![PyPI - Django Version](https://img.shields.io/pypi/djversions/django-event-calendar)](https://pypi.org/project/django-event-calendar/)
-[![Downloads](https://static.pepy.tech/personalized-badge/django-event-calendar?period=month&units=international_system&left_color=black&right_color=blue&left_text=Downloads/month)](https://pepy.tech/project/django-event-calendar)
+[![Python tests](https://github.com/rodolvbg/django-ec-calendar/actions/workflows/pytest.yml/badge.svg)](https://github.com/rodolvbg/django-ec-calendar/actions/workflows/pytest.yml)
+[![JavaScript tests](https://github.com/rodolvbg/django-ec-calendar/actions/workflows/js-tests.yml/badge.svg)](https://github.com/rodolvbg/django-ec-calendar/actions/workflows/js-tests.yml)
+[![Current version on PyPI](https://img.shields.io/pypi/v/django-ec-calendar.svg)](https://pypi.org/project/django-ec-calendar/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/django-ec-calendar)](https://pypi.org/project/django-ec-calendar/)
+[![PyPI - Django Version](https://img.shields.io/pypi/djversions/django-ec-calendar)](https://pypi.org/project/django-ec-calendar/)
+[![Downloads](https://static.pepy.tech/personalized-badge/django-ec-calendar?period=month&units=international_system&left_color=black&right_color=blue&left_text=Downloads/month)](https://pepy.tech/project/django-ec-calendar)
 
 A calendar for the Django admin and your own pages, with
 [EventCalendar](https://github.com/vkurko/calendar) (by vkurko, MIT): a
@@ -19,9 +19,9 @@ dark.
 ## Install
 
 ```bash
-uv add django-event-calendar
+uv add django-ec-calendar
 # or
-pip install django-event-calendar
+pip install django-ec-calendar
 ```
 
 Add it to `INSTALLED_APPS` (so Django finds its templates, and
@@ -31,7 +31,7 @@ CDN):
 ```python
 INSTALLED_APPS = [
     ...,
-    "django_event_calendar",
+    "django_ec_calendar",
 ]
 ```
 
@@ -39,7 +39,7 @@ INSTALLED_APPS = [
 
 ```python
 from django.contrib import admin
-from django_event_calendar import CalendarAdminMixin
+from django_ec_calendar import CalendarAdminMixin
 
 
 @admin.register(Booking)
@@ -138,7 +138,7 @@ Unfold's), else the system's.
 A view with the events, as the calendar asks for them:
 
 ```python
-from django_event_calendar import EventFeedView
+from django_ec_calendar import EventFeedView
 
 
 class BookingEvents(EventFeedView):
@@ -159,14 +159,14 @@ business: `LoginRequiredMixin`, `get_queryset()`…
 And the calendar, in a template:
 
 ```django
-{% load event_calendar %}
+{% load ec_calendar %}
 <head>
   ...
-  {% event_calendar_media %}
+  {% ec_calendar_media %}
 </head>
 <body>
   {% url "booking-events" as events %}
-  {% event_calendar events view="timeGridWeek" views="dayGridMonth timeGridWeek listWeek" slotMinTime="07:00" %}
+  {% ec_calendar events view="timeGridWeek" views="dayGridMonth timeGridWeek listWeek" slotMinTime="07:00" %}
 </body>
 ```
 
@@ -183,13 +183,13 @@ which bubbles and can be cancelled — `preventDefault()`, and it isn't done
 
 | Event | `detail` | Otherwise |
 |---|---|---|
-| `django-event-calendar:event-click` | `event` (EventCalendar's), `url`, `jsEvent` | Opens `url`. |
-| `django-event-calendar:date-click` | `start`, `allDay`, `jsEvent` | Opens the add page. |
-| `django-event-calendar:select` | `start`, `end`, `allDay`, `jsEvent` | Opens the add page. |
-| `django-event-calendar:event-change` | `event`, `saved`, `error` | (After a move; not cancellable.) |
+| `django-ec-calendar:event-click` | `event` (EventCalendar's), `url`, `jsEvent` | Opens `url`. |
+| `django-ec-calendar:date-click` | `start`, `allDay`, `jsEvent` | Opens the add page. |
+| `django-ec-calendar:select` | `start`, `end`, `allDay`, `jsEvent` | Opens the add page. |
+| `django-ec-calendar:event-change` | `event`, `saved`, `error` | (After a move; not cancellable.) |
 
 ```js
-document.addEventListener("django-event-calendar:event-click", (event) => {
+document.addEventListener("django-ec-calendar:event-click", (event) => {
     event.preventDefault();
     openDialog(event.detail.url);  // A dialog, instead of a page.
 });
@@ -198,9 +198,9 @@ document.addEventListener("django-event-calendar:event-click", (event) => {
 They fire without an add page too (on your pages, `selectable: true` in the
 options for selections).
 
-The script makes every `[data-django-event-calendar]` on the page;
-`window.djangoEventCalendar.setup()` makes those added later, and
-`window.djangoEventCalendar.go` is where a click leads (a single-page app's
+The script makes every `[data-django-ec-calendar]` on the page;
+`window.djangoEcCalendar.setup()` makes those added later, and
+`window.djangoEcCalendar.go` is where a click leads (a single-page app's
 router, instead of a page load).
 
 ## Content Security Policy
@@ -221,7 +221,7 @@ Django's `FIRST_DAY_OF_WEEK`.
 
 [EventCalendar](https://github.com/vkurko/calendar) 5.17.1's standalone
 build is included as it's published
-(`static/django_event_calendar/vendor/event-calendar/`, with its MIT
+(`static/django_ec_calendar/vendor/event-calendar/`, with its MIT
 license). Its options are documented in
 [its README](https://github.com/vkurko/calendar#options).
 

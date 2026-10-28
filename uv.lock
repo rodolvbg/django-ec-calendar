@@ -462,7 +462,7 @@ wheels = [
 ]
 
 [[package]]
-name = "django-event-calendar"
+name = "django-ec-calendar"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

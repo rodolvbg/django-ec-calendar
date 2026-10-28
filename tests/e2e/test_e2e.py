@@ -125,7 +125,7 @@ class TestBookings(_AdminE2ETestCase):
         page.mouse.move(start[0] + self.day(1)["width"], start[1] + 2 * hour, steps=15)
         page.mouse.up()
         expect(event).to_contain_text("12:00")
-        expect(page.locator(".django-event-calendar-status")).to_be_hidden()
+        expect(page.locator(".django-ec-calendar-status")).to_be_hidden()
         page.wait_for_timeout(300)
         call.refresh_from_db()
         assert (call.start, call.end) == (self.at(2, 12), self.at(2, 13))
@@ -174,7 +174,7 @@ class TestBookings(_AdminE2ETestCase):
         page.mouse.down()
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 5 + hour, steps=10)
         page.mouse.up()
-        status = page.locator(".django-event-calendar-status")
+        status = page.locator(".django-ec-calendar-status")
         expect(status).to_be_visible()
         expect(status).to_have_text("It can't end before it starts.")
         expect(event).to_contain_text("10:00")
@@ -218,7 +218,7 @@ class TestBookings(_AdminE2ETestCase):
         # A page of its own: a click on an event opens its dialog instead.
         page.evaluate(
             """() => document.addEventListener(
-                "django-event-calendar:event-click",
+                "django-ec-calendar:event-click",
                 (event) => {
                     event.preventDefault();
                     document.title = `Open ${event.detail.event.id}`;

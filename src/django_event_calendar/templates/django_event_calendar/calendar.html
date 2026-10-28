@@ -1,5 +1,0 @@
-{# A calendar: calendar.js makes it from its configuration (no inline script). #}
-<div class="django-event-calendar" id="{{ id }}" data-django-event-calendar="{{ id }}-config">
-  <p class="django-event-calendar-status" role="status" aria-live="polite" hidden></p>
-</div>
-{% with config_id=id|add:"-config" %}{{ config|json_script:config_id }}{% endwith %}

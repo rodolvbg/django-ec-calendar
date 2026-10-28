@@ -54,7 +54,7 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
     model (``full_clean()`` of its dates), saved through ``save_model()``
     and logged as the admin's changes are.
 
-    The fields, as :class:`~django_event_calendar.CalendarSource`'s
+    The fields, as :class:`~django_ec_calendar.CalendarSource`'s
     (``calendar_start_field``, ``calendar_end_field``,
     ``calendar_all_day_field``, ``calendar_title_field``,
     ``calendar_color_field``); ``calendar_view`` and ``calendar_views``,
@@ -77,9 +77,9 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
     #: Any other of EventCalendar's options (JSON).
     calendar_options: dict[str, Any] = {}  # noqa: RUF012
     #: The calendar's page.
-    calendar_template = "django_event_calendar/admin/calendar.html"
+    calendar_template = "django_ec_calendar/admin/calendar.html"
     #: The changelist's: the admin's, and a link to the calendar.
-    calendar_change_list_template = "django_event_calendar/admin/change_list.html"
+    calendar_change_list_template = "django_ec_calendar/admin/change_list.html"
 
     @property
     def uses_calendar(self) -> bool:
@@ -269,11 +269,11 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
             url = f"{url}?{request.GET.urlencode()}"
         # The admin's changelist_view() renders a name or a list of names.
         template_name = cast("str | Sequence[str]", response.template_name)
-        context["django_event_calendar_parent"] = select_template(
+        context["django_ec_calendar_parent"] = select_template(
             [template_name] if isinstance(template_name, str) else template_name
         )
-        context["django_event_calendar_url"] = url
-        context["django_event_calendar_unfold"] = apps.is_installed("unfold")
+        context["django_ec_calendar_url"] = url
+        context["django_ec_calendar_unfold"] = apps.is_installed("unfold")
         response.template_name = self.calendar_change_list_template
         return response
 

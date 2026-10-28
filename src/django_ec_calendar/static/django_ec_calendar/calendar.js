@@ -1,5 +1,5 @@
 /**
- * django-event-calendar: makes each [data-django-event-calendar] element
+ * django-ec-calendar: makes each [data-django-ec-calendar] element
  * an EventCalendar (https://github.com/vkurko/calendar), from the JSON of
  * its configuration (the element whose id it names: no inline script).
  *
@@ -15,14 +15,14 @@
  * Each of those first fires an event on the calendar's element, which
  * bubbles and can be cancelled (`preventDefault()`: not done), with its
  * dates as the server reads them (`start`, `end`):
- *   - `django-event-calendar:event-click` ({event, url, jsEvent}),
- *   - `django-event-calendar:date-click` ({start, allDay, jsEvent}),
- *   - `django-event-calendar:select` ({start, end, allDay, jsEvent});
- * and after a move, `django-event-calendar:event-change` ({event, saved,
+ *   - `django-ec-calendar:event-click` ({event, url, jsEvent}),
+ *   - `django-ec-calendar:date-click` ({start, allDay, jsEvent}),
+ *   - `django-ec-calendar:select` ({start, end, allDay, jsEvent});
+ * and after a move, `django-ec-calendar:event-change` ({event, saved,
  * error}).
  *
  * It follows the page's theme, light or dark (Django's admin, Unfold, a
- * "dark" class), else the system's. `window.djangoEventCalendar.setup()`
+ * "dark" class), else the system's. `window.djangoEcCalendar.setup()`
  * makes those added later.
  */
 (() => {
@@ -126,9 +126,7 @@
     // The calendar ----------------------------------------------------------
 
     function config(element) {
-        const node = document.getElementById(
-            element.dataset.djangoEventCalendar,
-        );
+        const node = document.getElementById(element.dataset.djangoEcCalendar);
         try {
             return node ? JSON.parse(node.textContent) : null;
         } catch {
@@ -138,7 +136,7 @@
 
     function create(element, options) {
         const texts = options.texts;
-        const status = element.querySelector(".django-event-calendar-status");
+        const status = element.querySelector(".django-ec-calendar-status");
         const target = document.createElement("div");
         element.append(target);
 
@@ -148,10 +146,10 @@
             status.hidden = !text;
         }
 
-        /** Fire `django-event-calendar:<name>`; whether it wasn't cancelled. */
+        /** Fire `django-ec-calendar:<name>`; whether it wasn't cancelled. */
         function announce(name, detail, cancelable = true) {
             return element.dispatchEvent(
-                new CustomEvent(`django-event-calendar:${name}`, {
+                new CustomEvent(`django-ec-calendar:${name}`, {
                     bubbles: true,
                     cancelable,
                     detail,
@@ -276,13 +274,13 @@
     function setup(root = document) {
         const made = [];
         for (const element of root.querySelectorAll(
-            "[data-django-event-calendar]",
+            "[data-django-ec-calendar]",
         )) {
-            if (element.djangoEventCalendar || !window.EventCalendar) continue;
+            if (element.djangoEcCalendar || !window.EventCalendar) continue;
             const options = config(element);
             if (!options) continue;
-            element.djangoEventCalendar = create(element, options);
-            made.push(element.djangoEventCalendar);
+            element.djangoEcCalendar = create(element, options);
+            made.push(element.djangoEcCalendar);
         }
         return made;
     }
@@ -294,7 +292,7 @@
         /** Where a click leads (replaceable: a single-page app's router). */
         go: (url) => window.location.assign(url),
     };
-    window.djangoEventCalendar = api;
+    window.djangoEcCalendar = api;
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", () => setup());

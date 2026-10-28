@@ -26,7 +26,7 @@ def at(day, hour, minute=0):
     return datetime.datetime(2026, 10, day, hour, minute, tzinfo=MADRID)
 
 
-def config(html, element="django-event-calendar-config"):
+def config(html, element="django-ec-calendar-config"):
     match = re.search(
         rf'<script id="{element}" type="application/json">(.*?)</script>', html
     )
@@ -115,7 +115,7 @@ class TestCalendarPage:
         assert data["firstDay"] == 0
         assert "Calendar of bookings" in html
         assert "event-calendar.min.js" in html
-        assert "django_event_calendar/calendar.js" in html
+        assert "django_ec_calendar/calendar.js" in html
         assert f'href="{reverse("admin:agenda_booking_add")}"' in html
 
     def test_keeps_the_changelists_filters(self, superuser, blue):

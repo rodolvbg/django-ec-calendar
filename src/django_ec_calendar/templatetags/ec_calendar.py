@@ -1,9 +1,9 @@
-"""``{% event_calendar %}``: a calendar on a page.
+"""``{% ec_calendar %}``: a calendar on a page.
 
-{% load event_calendar %}
-{% event_calendar_media %}  {# in <head> #}
+{% load ec_calendar %}
+{% ec_calendar_media %}  {# in <head> #}
 {% url "booking-events" as events %}
-{% event_calendar events view="timeGridWeek" %}
+{% ec_calendar events view="timeGridWeek" %}
 """
 
 from __future__ import annotations
@@ -23,13 +23,13 @@ _ids = count(1)
 
 
 @register.simple_tag
-def event_calendar_media() -> SafeString:
+def ec_calendar_media() -> SafeString:
     """EventCalendar's stylesheet and script, and the package's."""
     return SafeString(str(calendar_media()))
 
 
 @register.simple_tag(takes_context=True)
-def event_calendar(
+def ec_calendar(
     context: template.Context,
     events: str,
     view: str = "dayGridMonth",
@@ -48,10 +48,10 @@ def event_calendar(
         views=views.split(),
         options=options,
     )
-    element = id or f"event-calendar-{next(_ids)}"
+    element = id or f"ec-calendar-{next(_ids)}"
     return SafeString(
         render_to_string(
-            "django_event_calendar/calendar.html",
+            "django_ec_calendar/calendar.html",
             {"id": element, "config": config},
         )
     )

@@ -4,7 +4,7 @@ from django.contrib import admin
 from unfold.admin import ModelAdmin
 from unfold.sites import UnfoldAdminSite
 
-from django_event_calendar import CalendarAdminMixin
+from django_ec_calendar import CalendarAdminMixin
 
 from .models import Booking, Holiday, Room
 

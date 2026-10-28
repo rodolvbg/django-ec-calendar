@@ -1,6 +1,6 @@
 from django.shortcuts import get_object_or_404, render
 
-from django_event_calendar import EventFeedView
+from django_ec_calendar import EventFeedView
 
 from .models import Booking
 

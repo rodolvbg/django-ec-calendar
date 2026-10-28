@@ -1,8 +1,8 @@
 {
-    "name": "django-event-calendar",
+    "name": "django-ec-calendar",
     "private": true,
     "type": "module",
-    "description": "JS test tooling for django-event-calendar",
+    "description": "JS test tooling for django-ec-calendar",
     "scripts": {
         "test": "vitest run",
         "test:watch": "vitest",

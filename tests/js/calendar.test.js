@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const SCRIPT =
-    "../../src/django_event_calendar/static/django_event_calendar/calendar.js";
+    "../../src/django_ec_calendar/static/django_ec_calendar/calendar.js";
 
 const TEXTS = {
     today: "Today",
@@ -33,19 +33,19 @@ let created;
 
 function page(config = CONFIG, { around = "", raw = null } = {}) {
     const json = raw ?? JSON.stringify(config);
-    document.body.innerHTML = `<div id="wrap" ${around}><div class="django-event-calendar" id="c" data-django-event-calendar="c-config"><p class="django-event-calendar-status" hidden></p></div></div><script id="c-config" type="application/json">${json}</script>`;
+    document.body.innerHTML = `<div id="wrap" ${around}><div class="django-ec-calendar" id="c" data-django-ec-calendar="c-config"><p class="django-ec-calendar-status" hidden></p></div></div><script id="c-config" type="application/json">${json}</script>`;
 }
 
 async function load(readyState = "complete") {
     vi.spyOn(document, "readyState", "get").mockReturnValue(readyState);
     vi.resetModules();
     await import(`${SCRIPT}?${Math.random()}`);
-    return window.djangoEventCalendar;
+    return window.djangoEcCalendar;
 }
 
 const options = () => created.at(-1).options;
 const element = () => document.getElementById("c");
-const status = () => element().querySelector(".django-event-calendar-status");
+const status = () => element().querySelector(".django-ec-calendar-status");
 
 beforeEach(() => {
     created = [];
@@ -75,7 +75,7 @@ describe("calendar.js", () => {
         expect(window.EventCalendar.create).toHaveBeenCalledOnce();
         const calendar = created[0];
         expect(calendar.target.parentElement).toBe(element());
-        expect(element().djangoEventCalendar).toBe(calendar);
+        expect(element().djangoEcCalendar).toBe(calendar);
         const o = options();
         expect(o.view).toBe("timeGridWeek");
         expect(o.headerToolbar).toEqual({
@@ -160,10 +160,10 @@ describe("calendar.js", () => {
         const o = options();
         expect(o.selectable).toBe(false);
         // Nothing to add: only its events fire.
-        const api = window.djangoEventCalendar;
+        const api = window.djangoEcCalendar;
         api.go = vi.fn();
         const clicked = vi.fn();
-        element().addEventListener("django-event-calendar:date-click", clicked);
+        element().addEventListener("django-ec-calendar:date-click", clicked);
         o.dateClick({ date: new Date("2026-10-28T10:00:00"), allDay: false });
         o.select({
             start: new Date("2026-10-28T10:00:00"),
@@ -299,7 +299,7 @@ describe("calendar.js", () => {
         await load();
         expect(created).toHaveLength(0);
         document.getElementById("c-config").remove();
-        window.djangoEventCalendar.setup();
+        window.djangoEcCalendar.setup();
         expect(created).toHaveLength(0);
 
         page();
@@ -308,7 +308,7 @@ describe("calendar.js", () => {
         await load();
         expect(created).toHaveLength(0);
         window.EventCalendar = saved;
-        const api = window.djangoEventCalendar;
+        const api = window.djangoEcCalendar;
         expect(api.setup()).toHaveLength(1);
         expect(api.setup()).toHaveLength(0); // Made already.
     });
@@ -346,7 +346,7 @@ describe("its events", () => {
             heard.push(event);
             if (cancel) event.preventDefault();
         };
-        const type = `django-event-calendar:${name}`;
+        const type = `django-ec-calendar:${name}`;
         document.addEventListener(type, listener);
         listeners.push([type, listener]);
         return heard;
@@ -435,14 +435,14 @@ describe("its theme", () => {
         await load();
         expect(classes()).toEqual(["ec-dark"]);
         page(CONFIG, { around: 'class="light"' });
-        window.djangoEventCalendar.setup();
+        window.djangoEcCalendar.setup();
         expect(classes()).toEqual([]);
         page(CONFIG, { around: 'data-theme="light"' });
-        window.djangoEventCalendar.setup();
+        window.djangoEcCalendar.setup();
         expect(classes()).toEqual([]);
         document.documentElement.removeAttribute("data-theme");
         page(CONFIG, { around: 'class="dark"' });
-        window.djangoEventCalendar.setup();
+        window.djangoEcCalendar.setup();
         expect(classes()).toEqual(["ec-dark"]);
     });
 
@@ -451,12 +451,12 @@ describe("its theme", () => {
         await load();
         expect(classes()).toEqual(["ec-dark"]);
         page(CONFIG, { around: 'style="background-color: rgba(0, 0, 0, 0)"' });
-        window.djangoEventCalendar.setup();
+        window.djangoEcCalendar.setup();
         expect(classes()).toEqual(["ec-auto-dark"]);
         page(CONFIG, {
             around: 'style="background-color: rgb(250, 250, 250)"',
         });
-        window.djangoEventCalendar.setup();
+        window.djangoEcCalendar.setup();
         expect(classes()).toEqual([]);
     });
 

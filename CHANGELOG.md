@@ -17,9 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CalendarSource`: objects as EventCalendar's events by their fields
   (`DateTimeField` or `DateField`, an end, all day, a title and a color),
   in the site's time zone whatever the browser's.
-- `EventFeedView` and `{% event_calendar %}`: a calendar on your own pages.
+- `EventFeedView` and `{% ec_calendar %}`: a calendar on your own pages.
 - EventCalendar 5.17.1 (vkurko, MIT), its standalone build, included.
 - Events on the calendar's element, to do otherwise without changing its
-  script: `django-event-calendar:event-click`, `:date-click`, `:select`
+  script: `django-ec-calendar:event-click`, `:date-click`, `:select`
   (cancellable) and `:event-change`.
 - Spanish translation.

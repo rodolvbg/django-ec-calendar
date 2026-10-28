@@ -40,7 +40,7 @@ jobs:
 
     environment:
       name: pypi
-      url: https://pypi.org/project/django-event-calendar/
+      url: https://pypi.org/project/django-ec-calendar/
 
     steps:
       - name: Retrieve release distributions

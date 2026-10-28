@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from django.http import HttpRequest
 
 #: The vendored EventCalendar 5.17.1 (its standalone build, as published).
-VENDOR = "django_event_calendar/vendor/event-calendar"
+VENDOR = "django_ec_calendar/vendor/event-calendar"
 
 
 def calendar_media() -> Media:
@@ -24,10 +24,10 @@ def calendar_media() -> Media:
         css={
             "all": [
                 f"{VENDOR}/event-calendar.min.css",
-                "django_event_calendar/calendar.css",
+                "django_ec_calendar/calendar.css",
             ]
         },
-        js=[f"{VENDOR}/event-calendar.min.js", "django_event_calendar/calendar.js"],
+        js=[f"{VENDOR}/event-calendar.min.js", "django_ec_calendar/calendar.js"],
     )
 
 

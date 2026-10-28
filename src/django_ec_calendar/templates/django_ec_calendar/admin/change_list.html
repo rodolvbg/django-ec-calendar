@@ -1,0 +1,13 @@
+{% extends django_ec_calendar_parent %}
+{% load i18n %}
+
+{% block object-tools-items %}
+  {{ block.super }}
+  {% translate "Calendar" as calendar_title %}
+  {% if django_ec_calendar_unfold %}
+    {# In a list: no marker (Unfold's items are list items alone). #}
+    <ul class="flex">{% include "unfold/helpers/tab_action.html" with title=calendar_title link=django_ec_calendar_url icon="calendar_month" %}</ul>
+  {% else %}
+    <li><a href="{{ django_ec_calendar_url }}" class="django-ec-calendar-link">{{ calendar_title }}</a></li>
+  {% endif %}
+{% endblock object-tools-items %}

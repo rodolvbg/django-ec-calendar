@@ -34,7 +34,7 @@ The admin's bookings and holidays have a "Calendar"; `/` is a calendar on a
 page.
 
 EventCalendar is vendored in
-`src/django_event_calendar/static/django_event_calendar/vendor/event-calendar/`,
+`src/django_ec_calendar/static/django_ec_calendar/vendor/event-calendar/`,
 as `@event-calendar/build` publishes it (`npm pack @event-calendar/build@<version>`,
 its `dist/event-calendar.min.{js,css}` and the repository's `LICENSE`). Update
 its version in `config.py`'s docstring, the README and the CHANGELOG too.
