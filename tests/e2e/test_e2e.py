@@ -199,6 +199,36 @@ class TestBookings(_AdminE2ETestCase):
         assert page.locator("#id_start_1").input_value().startswith("09:00")
         assert page.locator("#id_end_1").input_value().startswith("11:00")
 
+    def test_a_click_adds_one_at_its_slot(self):
+        self.login()
+        self.open_calendar()
+        page = self.page
+        x = self.day(1)["x"] + self.day(1)["width"] / 2
+        hour = self.slot("9:00 AM")["y"] - self.slot("8:00 AM")["y"]
+        # 9:20, in the 9:00 slot (of half an hour): the slot's start.
+        page.mouse.click(x, self.day(1)["y"] + hour * (2 + 20 / 60))
+        expect(page).to_have_url(re.compile(r"/admin/agenda/booking/add/\?start="))
+        assert page.locator("#id_start_1").input_value().startswith("09:00")
+
+    def test_its_events_let_a_page_do_otherwise(self):
+        call = self.book("Client call", 1, 10, 12)
+        self.login()
+        self.open_calendar()
+        page = self.page
+        # A page of its own: a click on an event opens its dialog instead.
+        page.evaluate(
+            """() => document.addEventListener(
+                "django-event-calendar:event-click",
+                (event) => {
+                    event.preventDefault();
+                    document.title = `Open ${event.detail.event.id}`;
+                },
+            )"""
+        )
+        page.locator(".ec-event", has_text="Client call").click()
+        expect(page).to_have_title(f"Open {call.pk}")
+        assert page.url.endswith("/calendar/")
+
     def test_in_another_time_zone_the_same_times(self):
         self.book("Client call", 1, 10, 12)
         self.page.close()

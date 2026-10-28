@@ -159,7 +159,19 @@ describe("calendar.js", () => {
         await load();
         const o = options();
         expect(o.selectable).toBe(false);
-        expect(o.dateClick).toBeUndefined();
+        // Nothing to add: only its events fire.
+        const api = window.djangoEventCalendar;
+        api.go = vi.fn();
+        const clicked = vi.fn();
+        element().addEventListener("django-event-calendar:date-click", clicked);
+        o.dateClick({ date: new Date("2026-10-28T10:00:00"), allDay: false });
+        o.select({
+            start: new Date("2026-10-28T10:00:00"),
+            end: new Date("2026-10-28T11:00:00"),
+            allDay: false,
+        });
+        expect(clicked).toHaveBeenCalledOnce();
+        expect(api.go).not.toHaveBeenCalled();
         expect(o.eventDrop).toBeUndefined();
         expect(o.eventResize).toBeUndefined();
         expect(o.headerToolbar.end).toBe("");
@@ -316,6 +328,100 @@ describe("calendar.js", () => {
         vi.spyOn(window, "location", "get").mockReturnValue({ assign });
         api.go("/somewhere/");
         expect(assign).toHaveBeenCalledWith("/somewhere/");
+    });
+});
+
+describe("its events", () => {
+    const listeners = [];
+
+    afterEach(() => {
+        for (const args of listeners.splice(0)) {
+            document.removeEventListener(...args);
+        }
+    });
+
+    function listen(name, cancel = false) {
+        const heard = [];
+        const listener = (event) => {
+            heard.push(event);
+            if (cancel) event.preventDefault();
+        };
+        const type = `django-event-calendar:${name}`;
+        document.addEventListener(type, listener);
+        listeners.push([type, listener]);
+        return heard;
+    }
+
+    it("tells of a click on an event, and lets it be done otherwise", async () => {
+        page();
+        const api = await load();
+        api.go = vi.fn();
+        const heard = listen("event-click", true);
+        const event = { extendedProps: { url: "/x/" } };
+        options().eventClick({ event, jsEvent: "click" });
+        expect(heard).toHaveLength(1);
+        expect(heard[0].target).toBe(element()); // Bubbled to the document.
+        expect(heard[0].detail).toEqual({
+            event,
+            url: "/x/",
+            jsEvent: "click",
+        });
+        expect(api.go).not.toHaveBeenCalled();
+        options().eventClick({ event: {} });
+        expect(heard[1].detail.url).toBe(null);
+    });
+
+    it("tells of a click on a date, or a selection, with the server's dates", async () => {
+        page();
+        const api = await load();
+        api.go = vi.fn();
+        const clicks = listen("date-click", true);
+        const selections = listen("select", true);
+        options().dateClick({
+            date: new Date("2026-10-28T09:00:00"),
+            allDay: false,
+        });
+        expect(clicks[0].detail).toEqual({
+            start: "2026-10-28T09:00:00",
+            allDay: false,
+            jsEvent: undefined,
+        });
+        options().select({
+            start: new Date("2026-10-28T00:00:00"),
+            end: new Date("2026-10-30T00:00:00"),
+            allDay: true,
+        });
+        expect(selections[0].detail).toEqual({
+            start: "2026-10-28",
+            end: "2026-10-30",
+            allDay: true,
+            jsEvent: undefined,
+        });
+        expect(api.go).not.toHaveBeenCalled(); // Both cancelled.
+    });
+
+    it("tells whether a move was saved", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockResolvedValueOnce({ ok: true })
+                .mockResolvedValueOnce({
+                    ok: false,
+                    json: async () => ({ error: "No." }),
+                }),
+        );
+        page();
+        await load();
+        const heard = listen("event-change");
+        const event = { id: "1", start: new Date(), end: null, allDay: false };
+        await options().eventDrop({ event, revert: vi.fn() });
+        await options().eventDrop({ event, revert: vi.fn() });
+        expect(heard.map((e) => e.detail)).toEqual([
+            { event, saved: true, error: "" },
+            { event, saved: false, error: "No." },
+        ]);
+        expect(heard[0].cancelable).toBe(false);
     });
 });
 

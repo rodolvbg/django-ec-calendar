@@ -61,7 +61,8 @@ The changelist gets a "Calendar" link, next to "Add":
 - **A click** on an event opens its change page (read-only, for those who
   may only view it).
 - **Selecting dates** (or clicking one) opens the add page with them, for
-  those who may add (`calendar_selectable = False`: not).
+  those who may add (`calendar_selectable = False`: not). A click starts
+  at its slot's start (9:20 in half-hour slots: 9:00).
 - **Dragging** an event, or its end, saves its dates, for those who may
   change it (`calendar_editable = False`: not). The move is checked by the
   model (`full_clean()` of its dates, and its `clean()`), saved through
@@ -70,6 +71,30 @@ The changelist gets a "Calendar" link, next to "Add":
 - **Its views**: `calendar_views` — by default month, week, day and list
   (`dayGridMonth`, `timeGridWeek`, `timeGridDay`, `listMonth`; any of
   [EventCalendar's](https://github.com/vkurko/calendar#view)).
+
+### In the menu
+
+The calendar's URL is `admin:<app>_<model>_calendar`; in Unfold's sidebar,
+for instance:
+
+```python
+UNFOLD = {
+    "SIDEBAR": {
+        "navigation": [
+            {
+                "title": "Agenda",
+                "items": [
+                    {
+                        "title": "Calendar",
+                        "icon": "calendar_month",
+                        "link": reverse_lazy("admin:agenda_booking_calendar"),
+                    },
+                ],
+            },
+        ],
+    },
+}
+```
 
 ### Its fields
 
@@ -149,6 +174,29 @@ And the calendar, in a template:
 keyword is one of EventCalendar's options. On a page it's read-only.
 
 ![A calendar on a page](docs/screenshots/calendar-page.png)
+
+### Its events, for doing otherwise
+
+Before it does what it does, the calendar fires an event on its element,
+which bubbles and can be cancelled — `preventDefault()`, and it isn't done
+— with the dates as the server reads them:
+
+| Event | `detail` | Otherwise |
+|---|---|---|
+| `django-event-calendar:event-click` | `event` (EventCalendar's), `url`, `jsEvent` | Opens `url`. |
+| `django-event-calendar:date-click` | `start`, `allDay`, `jsEvent` | Opens the add page. |
+| `django-event-calendar:select` | `start`, `end`, `allDay`, `jsEvent` | Opens the add page. |
+| `django-event-calendar:event-change` | `event`, `saved`, `error` | (After a move; not cancellable.) |
+
+```js
+document.addEventListener("django-event-calendar:event-click", (event) => {
+    event.preventDefault();
+    openDialog(event.detail.url);  // A dialog, instead of a page.
+});
+```
+
+They fire without an add page too (on your pages, `selectable: true` in the
+options for selections).
 
 The script makes every `[data-django-event-calendar]` on the page;
 `window.djangoEventCalendar.setup()` makes those added later, and

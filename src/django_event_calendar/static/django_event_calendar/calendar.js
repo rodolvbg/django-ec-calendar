@@ -12,6 +12,15 @@
  * and sends them back so; its `timeZone` is the site's, for "today" and the
  * time now.
  *
+ * Each of those first fires an event on the calendar's element, which
+ * bubbles and can be cancelled (`preventDefault()`: not done), with its
+ * dates as the server reads them (`start`, `end`):
+ *   - `django-event-calendar:event-click` ({event, url, jsEvent}),
+ *   - `django-event-calendar:date-click` ({start, allDay, jsEvent}),
+ *   - `django-event-calendar:select` ({start, end, allDay, jsEvent});
+ * and after a move, `django-event-calendar:event-change` ({event, saved,
+ * error}).
+ *
  * It follows the page's theme, light or dark (Django's admin, Unfold, a
  * "dark" class), else the system's. `window.djangoEventCalendar.setup()`
  * makes those added later.
@@ -139,6 +148,17 @@
             status.hidden = !text;
         }
 
+        /** Fire `django-event-calendar:<name>`; whether it wasn't cancelled. */
+        function announce(name, detail, cancelable = true) {
+            return element.dispatchEvent(
+                new CustomEvent(`django-event-calendar:${name}`, {
+                    bubbles: true,
+                    cancelable,
+                    detail,
+                }),
+            );
+        }
+
         function add(start, end, allDay) {
             const dates = allDay || options.datesOnly;
             const query = new URLSearchParams({ start: moment(start, dates) });
@@ -170,9 +190,23 @@
                     throw new Error(data.error || texts.failed);
                 }
                 say("");
+                announce(
+                    "event-change",
+                    { event, saved: true, error: "" },
+                    false,
+                );
             } catch (error) {
                 info.revert();
                 say(error.message || texts.failed);
+                announce(
+                    "event-change",
+                    {
+                        event,
+                        saved: false,
+                        error: error.message || texts.failed,
+                    },
+                    false,
+                );
             }
         }
 
@@ -197,14 +231,38 @@
             moreLinkContent: (arg) =>
                 texts.more.replace("%(count)s", String(arg.num)),
             eventClick(info) {
-                const url = info.event.extendedProps?.url;
-                if (url) api.go(url);
+                const url = info.event.extendedProps?.url ?? null;
+                const detail = {
+                    event: info.event,
+                    url,
+                    jsEvent: info.jsEvent,
+                };
+                if (announce("event-click", detail) && url) api.go(url);
             },
             selectable: Boolean(options.add),
-            select: (info) => add(info.start, info.end, info.allDay),
-            dateClick: options.add
-                ? (info) => add(info.date, null, info.allDay)
-                : undefined,
+            select(info) {
+                const dates = info.allDay || options.datesOnly;
+                const detail = {
+                    start: moment(info.start, dates),
+                    end: moment(info.end, dates),
+                    allDay: info.allDay,
+                    jsEvent: info.jsEvent,
+                };
+                if (announce("select", detail) && options.add) {
+                    add(info.start, info.end, info.allDay);
+                }
+            },
+            dateClick(info) {
+                const dates = info.allDay || options.datesOnly;
+                const detail = {
+                    start: moment(info.date, dates),
+                    allDay: info.allDay,
+                    jsEvent: info.jsEvent,
+                };
+                if (announce("date-click", detail) && options.add) {
+                    add(info.date, null, info.allDay);
+                }
+            },
             // Each event says whether it may be dragged (its `editable`).
             editable: false,
             eventDrop: options.move ? save : undefined,
