@@ -6,4 +6,4 @@ from .views import EventFeedView
 
 __all__ = ["CalendarAdminMixin", "CalendarSource", "EventFeedView"]
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

@@ -4,7 +4,7 @@ requires = [ "hatch-fancy-pypi-readme", "hatchling" ]
 
 [project]
 name = "django-ec-calendar"
-version = "0.1.0"
+version = "0.1.1"
 description = """\
   A calendar for the Django admin and your pages, with EventCalendar: the changelist's objects by date, opened with a \
   click, added by selecting the dates, moved and resized by dragging. In Django's admin and in django-unfold.\
