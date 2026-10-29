@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `calendar_move_mode` (and `get_calendar_move_mode(request)`): how a drag
+  goes — `"off"`, `"save"` (at once), `"confirm"` (asked first) or
+  `"batch"` (kept, several saved together in a transaction, or discarded;
+  leaving with some asks). Its endpoint, `calendar/moves/`.
+- `django-ec-calendar:move`, before a move, cancellable, with `save()`,
+  `revert()` and `pend()` for the page's own way; and
+  `django-ec-calendar:batch-change` after several are saved.
+- `prepare_calendar_move()` and `save_calendar_move()`: a move checked, and
+  saved, for your own views.
+
 - Business hours: `calendar_business_hours` and
   `get_calendar_business_hours(request, resource=None)` (the calendar's,
   each resource's), `get_calendar_closed()` (holidays, days off), shaded as
@@ -26,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `calendar_move_mode` instead of `calendar_editable` and
+  `calendar_confirm_move` (`calendar_editable = True` is
+  `calendar_move_mode = "confirm"`; and without asking, `"save"`).
 - `get_calendar_details(request, obj)` and
   `get_calendar_resource_empty_label(request)` take the request.
 

@@ -68,13 +68,9 @@ The changelist gets a "Calendar" link, next to "Add":
   the column's resource, for those who may add (`calendar_selectable =
   False`: not). A click starts at its slot's start (9:20 in half-hour
   slots: 9:00).
-- **Dragging** is off by default: a slip of the mouse would change an
-  appointment. With `calendar_editable = True`, dragging an event, or its
-  end, saves its dates (and its resource), asking first
-  (`calendar_confirm_move = False`: not), for those who may change it. The
-  move is checked by the model (`full_clean()` of what it changes, and its
-  `clean()`), saved through `save_model()` and logged as the admin's
-  changes are; what can't be saved goes back, saying why.
+- **Dragging** an event, or its end, changes its dates (and its
+  resource), as `calendar_move_mode` says — off by default: a slip of the
+  mouse would change an appointment. See [Dragging](#dragging).
 - **Where it was**: its view and date are in the page's URL (`ec-view`,
   `ec-date`), so the back button, a save, the filters and a shared link
   open it there (`calendar_url_state = False`: not).
@@ -145,7 +141,7 @@ class AppointmentAdmin(CalendarAdminMixin, admin.ModelAdmin):
     calendar_detail_fields = ("get_status_display",)
     calendar_view = "resourceTimeGridDay"
     calendar_views = ("resourceTimeGridDay", "resourceTimeGridWeek", "listWeek")
-    calendar_editable = True
+    calendar_move_mode = "batch"
 
     def get_calendar_queryset(self, request):
         # The calendar only: not the cancelled ones.
@@ -172,6 +168,48 @@ A `DateField`'s end is the last day (EventCalendar's is the day after: it's
 converted both ways).
 
 ![Whole days: a month of holidays](docs/screenshots/calendar-days.png)
+
+### Dragging
+
+`calendar_move_mode` (or `get_calendar_move_mode(request)`, for each user):
+
+| Mode | When an event is dropped, or resized |
+|---|---|
+| `"off"` | It can't be (the default). |
+| `"save"` | Saved at once. |
+| `"confirm"` | Asked first: saved, or back where it was. |
+| `"batch"` | Kept: several are moved, then **Save** (together) or **Discard**. |
+
+- **Who may move each** is `has_calendar_move_permission(request, obj)`: not
+  `"off"`, and one may change it, by default.
+- **Each move is checked** by the model (`full_clean()` of what it changes,
+  and its `clean()`), its resource and its hours, then saved through
+  `save_model()` and logged as the admin's changes are; what can't be
+  goes back, saying why.
+- **`"batch"`**: the moved events are dashed, and a bar over the calendar
+  says how many wait ("2 changes not saved"). Moving one again changes its
+  change. **Save** sends them all at once: all are checked first, and with
+  any that can't be, none is saved — the bar says which and why, and they
+  wait still; else all are saved, in a transaction. **Discard** puts them
+  back. Leaving the page with some asks first.
+- **Your own way**: before it does any of that, the calendar fires
+  `django-ec-calendar:move`, which can be cancelled; its `detail` has the
+  `event`, the `mode`, and `save()`, `revert()` and `pend()` (keep it, as
+  `"batch"` does), for the page to call:
+
+```js
+document.addEventListener("django-ec-calendar:move", (event) => {
+    event.preventDefault();  // The page's dialog, not the browser's confirm().
+    const { save, revert } = event.detail;
+    myDialog.ask("Move it?").then((yes) => (yes ? save() : revert()));
+});
+```
+
+For your own views, `prepare_calendar_move(request, move)` checks one
+(raising `CalendarMoveError`) and `save_calendar_move(request, prepared)`
+saves it, as the calendar does.
+
+![Two appointments moved, waiting: "2 changes not saved", Save, Discard](docs/screenshots/calendar-batch.png)
 
 ### Business hours
 
@@ -229,8 +267,9 @@ Each option has a method that takes the request, as the admin's
 | `get_calendar_business_hours(request, resource=None)`, `get_calendar_closed(request, start, end, resource=None)` | `calendar_business_hours`; none. |
 | `get_calendar_resources(request)`, `get_calendar_resource_empty_label(request)` | Its field's; "No …". |
 | `get_calendar_resource_editable(request)` | `calendar_resource_editable`. |
-| `get_calendar_confirm_move(request)`, `get_calendar_filters(request)`, `get_calendar_url_state(request)`, `get_calendar_highlight_today(request)` | Their attributes. |
-| `has_calendar_move_permission(request, obj=None)` | `calendar_editable`, and one may change it. |
+| `get_calendar_move_mode(request)` | `calendar_move_mode`. |
+| `get_calendar_filters(request)`, `get_calendar_url_state(request)`, `get_calendar_highlight_today(request)` | Their attributes. |
+| `has_calendar_move_permission(request, obj=None)` | Its move mode isn't `"off"`, and one may change it. |
 | `has_calendar_add_permission(request)` | `calendar_selectable`, and one may add. |
 
 ```python
@@ -324,7 +363,9 @@ which bubbles and can be cancelled — `preventDefault()`, and it isn't done
 | `django-ec-calendar:event-click` | `event` (EventCalendar's), `url`, `jsEvent` | Opens `url`. |
 | `django-ec-calendar:date-click` | `start`, `allDay`, `resource`, `jsEvent` | Opens the add page. |
 | `django-ec-calendar:select` | `start`, `end`, `allDay`, `resource`, `jsEvent` | Opens the add page. |
+| `django-ec-calendar:move` | `event`, `mode`, `save()`, `revert()`, `pend()` | As its mode says (see [Dragging](#dragging)). |
 | `django-ec-calendar:event-change` | `event`, `saved`, `error` | (After a move; not cancellable.) |
+| `django-ec-calendar:batch-change` | `saved`, `events`, `errors` | (After several saved together; not cancellable.) |
 
 ```js
 document.addEventListener("django-ec-calendar:event-click", (event) => {

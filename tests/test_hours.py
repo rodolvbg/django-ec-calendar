@@ -289,8 +289,7 @@ class TestMovesInItsHours:
 
     def test_without_resources(self, db):
         class Shut(BookingAdmin):
-            calendar_editable = True
-            calendar_confirm_move = False
+            calendar_move_mode = "save"
             calendar_outside_hours = "block"
             calendar_business_hours = [{"start": "09:00", "end": "10:00"}]
 
@@ -330,7 +329,7 @@ class TestEachRequest:
         monkeypatch.setattr(
             model_admin, "get_calendar_highlight_today", lambda r: False
         )
-        monkeypatch.setattr(model_admin, "get_calendar_confirm_move", lambda r: False)
+        monkeypatch.setattr(model_admin, "get_calendar_move_mode", lambda r: "save")
         monkeypatch.setattr(model_admin, "get_calendar_filters", lambda r: False)
         monkeypatch.setattr(
             model_admin, "get_calendar_options", lambda r: {"slotMinTime": "06:00"}
@@ -338,10 +337,10 @@ class TestEachRequest:
         html = admin_client.get(f"{APPOINTMENTS}calendar/").content.decode()
         data = config(html)
         assert (data["view"], data["views"]) == ("listWeek", ["listWeek"])
-        assert (data["urlState"], data["highlightToday"], data["confirmMove"]) == (
+        assert (data["urlState"], data["highlightToday"], data["moveMode"]) == (
             False,
             False,
-            False,
+            "save",
         )
         assert 'id="changelist-filter"' not in html
         # Its own, over those fitted to the hours.

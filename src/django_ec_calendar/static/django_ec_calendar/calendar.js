@@ -17,16 +17,23 @@
  * dates as the server reads them (`start`, `end`):
  *   - `django-ec-calendar:event-click` ({event, url, jsEvent}),
  *   - `django-ec-calendar:date-click` ({start, allDay, jsEvent}),
- *   - `django-ec-calendar:select` ({start, end, allDay, jsEvent});
+ *   - `django-ec-calendar:select` ({start, end, allDay, jsEvent}),
+ *   - `django-ec-calendar:move` ({event, mode, save(), revert(), pend()}:
+ *     cancelled, the page does it, calling one of those);
  * and after a move, `django-ec-calendar:event-change` ({event, saved,
- * error}).
+ * error}); after several saved together, `django-ec-calendar:batch-change`
+ * ({saved, events, errors}).
  *
  * With resources (`config.resources`), dropping an event in another one
  * changes it too (`config.resource.editable`), and adding sends it. With
  * `config.urlState`, the view and its date are in the page's URL (`ec-view`,
  * `ec-date`), read when it opens: back from an event's page, the same
  * place. With `config.returnParam`, the pages it opens get its URL, to come
- * back to it after a save. A move asks first, with `config.confirmMove`.
+ * back to it after a save.
+ *
+ * A drag goes as `config.moveMode` says: "save" (at once), "confirm" (asked
+ * first) or "batch" (kept, with a bar to save them together at
+ * `config.moves`, or discard them; leaving the page with some asks).
  *
  * Closed times (background events with `extendedProps.closed`: out of the
  * business hours) are the calendar's in the views without resources, and
@@ -231,41 +238,36 @@
             );
         }
 
-        async function save(info) {
+        /** A move, as the server reads it. */
+        function payload(info) {
             const { event } = info;
-            const elsewhere = info.newResource !== undefined;
-            if (elsewhere && !resource?.editable) {
-                failed(info, resource?.message ?? texts.failed);
-                return;
-            }
-            if (
-                options.confirmMove &&
-                !window.confirm(
-                    texts.confirmMove.replace("%(title)s", event.title),
-                )
-            ) {
-                failed(info, "");
-                return;
-            }
             const dates = event.allDay || options.datesOnly;
-            const body = new URLSearchParams({
+            const move = {
                 pk: event.id,
                 start: moment(event.start, dates),
                 end: event.end ? moment(event.end, dates) : "",
-            });
-            if (elsewhere) {
-                body.set("resource", String(info.newResource.id));
-                body.set("resource_from", String(info.oldResource?.id ?? ""));
+            };
+            if (info.newResource !== undefined) {
+                move.resource = String(info.newResource.id);
+                move.resource_from = String(info.oldResource?.id ?? "");
             }
+            return move;
+        }
+
+        const headers = (json) => ({
+            Accept: "application/json",
+            "X-CSRFToken": options.csrfToken || cookie("csrftoken"),
+            ...(json ? { "Content-Type": "application/json" } : {}),
+        });
+
+        /** Save a move now. */
+        async function send(info) {
             say(texts.saving);
             try {
                 const response = await fetch(options.move, {
                     method: "POST",
-                    headers: {
-                        Accept: "application/json",
-                        "X-CSRFToken": options.csrfToken || cookie("csrftoken"),
-                    },
-                    body,
+                    headers: headers(false),
+                    body: new URLSearchParams(payload(info)),
                     credentials: "same-origin",
                 });
                 if (!response.ok) {
@@ -275,12 +277,149 @@
                 say("");
                 announce(
                     "event-change",
-                    { event, saved: true, error: "" },
+                    { event: info.event, saved: true, error: "" },
                     false,
                 );
             } catch (error) {
                 failed(info, error.message || texts.failed);
             }
+        }
+
+        // Several moves, kept until they're saved together ("batch").
+        const pending = new Map();
+        const bar = document.createElement("div");
+        bar.className = "django-ec-calendar-pending";
+        bar.hidden = true;
+        const count = document.createElement("span");
+        const saveAll = node(
+            "button",
+            "django-ec-calendar-save button default",
+            texts.save,
+        );
+        const discard = node(
+            "button",
+            "django-ec-calendar-discard button",
+            texts.discard,
+        );
+        saveAll.type = discard.type = "button";
+        bar.append(count, saveAll, discard);
+        element.insertBefore(bar, target);
+        const plural = new Intl.PluralRules(options.locale);
+
+        function showPending() {
+            bar.hidden = pending.size === 0;
+            const words =
+                texts.pending?.[plural.select(pending.size)] ??
+                texts.pending?.other ??
+                "%(count)s";
+            count.textContent = words.replace(
+                "%(count)s",
+                String(pending.size),
+            );
+        }
+
+        /** Keep a move, to save it with the others. */
+        function pend(info) {
+            if (!options.moves) return send(info);
+            const move = payload(info);
+            const before = pending.get(move.pk);
+            if (before?.resource !== undefined) {
+                // From where it was before all of them.
+                move.resource ??= before.resource;
+                move.resource_from = before.resource_from;
+            }
+            pending.set(move.pk, move);
+            const classes = info.event.classNames ?? [];
+            if (!classes.includes(PENDING)) {
+                info.event.classNames = [...classes, PENDING];
+                calendar.updateEvent(info.event);
+            }
+            showPending();
+        }
+
+        saveAll.addEventListener("click", async () => {
+            say(texts.saving);
+            const moves = [...pending.values()];
+            try {
+                const response = await fetch(options.moves, {
+                    method: "POST",
+                    headers: headers(true),
+                    body: JSON.stringify({ moves }),
+                    credentials: "same-origin",
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    const errors = data.errors ?? {};
+                    say(
+                        Object.values(errors).join(" ") ||
+                            data.error ||
+                            texts.failed,
+                    );
+                    announce(
+                        "batch-change",
+                        { saved: false, events: [], errors },
+                        false,
+                    );
+                    return;
+                }
+                pending.clear();
+                showPending();
+                say("");
+                calendar.refetchEvents();
+                announce(
+                    "batch-change",
+                    { saved: true, events: data.events ?? [], errors: {} },
+                    false,
+                );
+            } catch {
+                say(texts.failed);
+            }
+        });
+
+        discard.addEventListener("click", () => {
+            pending.clear();
+            showPending();
+            say("");
+            calendar.refetchEvents(); // Where they are.
+        });
+
+        window.addEventListener("beforeunload", (event) => {
+            if (pending.size) {
+                event.preventDefault();
+                event.returnValue = "";
+            }
+        });
+
+        /** An event dropped, or resized: as its mode says, unless the page
+         * does it (its `move` event, cancelled). */
+        function moved(info) {
+            if (info.newResource !== undefined && !resource?.editable) {
+                failed(info, resource?.message ?? texts.failed);
+                return Promise.resolve();
+            }
+            const mode = options.moveMode;
+            const detail = {
+                event: info.event,
+                mode,
+                save: () => send(info),
+                revert: () => info.revert(),
+                pend: () => pend(info),
+            };
+            if (!announce("move", detail)) return Promise.resolve();
+            if (mode === "batch") {
+                pend(info);
+                return Promise.resolve();
+            }
+            if (
+                mode === "confirm" &&
+                !window.confirm(
+                    texts.confirmMove.replace("%(title)s", info.event.title),
+                )
+            ) {
+                failed(info, "");
+                return Promise.resolve();
+            }
+            return send(info);
         }
 
         /** Its title, and its details under it (as text); without any, as
@@ -456,8 +595,9 @@
             },
             // Each event says whether it may be dragged (its `editable`).
             editable: false,
-            eventDrop: options.move ? save : undefined,
-            eventResize: options.move ? save : undefined,
+            ...(options.move && options.moveMode !== "off"
+                ? { eventDrop: moved, eventResize: moved }
+                : {}),
             ...options.options,
             // Where it was (the page's URL), over where it opens.
             ...(state.view ? { view: state.view } : {}),
@@ -479,6 +619,9 @@
     }
 
     const KEEP = "[data-django-ec-calendar-keep-state]";
+
+    /** A moved event waiting to be saved ("batch"). */
+    const PENDING = "django-ec-calendar-pending-event";
 
     document.addEventListener(
         "click",

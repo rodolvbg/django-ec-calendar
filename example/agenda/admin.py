@@ -29,8 +29,8 @@ class BookingAdmin(CalendarAdminMixin, admin.ModelAdmin):
     calendar_color_field = "color"
     calendar_view = "timeGridWeek"
     calendar_options = {"slotMinTime": "07:00", "slotMaxTime": "21:00"}
-    # Dragging saves (asking first).
-    calendar_editable = True
+    # Dragging saves, asking first.
+    calendar_move_mode = "confirm"
 
 
 @admin.register(Holiday)
@@ -60,7 +60,8 @@ class AppointmentAdmin(CalendarAdminMixin, admin.ModelAdmin):
     calendar_detail_fields = ("get_status_display",)
     calendar_view = "resourceTimeGridDay"
     calendar_views = ("resourceTimeGridDay", "resourceTimeGridWeek", "listWeek")
-    calendar_editable = True
+    # Several moved, then saved together.
+    calendar_move_mode = "batch"
 
     # Weekdays, 9 to 14 and 16 to 20: the rest shaded, and not to be booked.
     calendar_business_hours = [

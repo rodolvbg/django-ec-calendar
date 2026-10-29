@@ -30,7 +30,8 @@ const CONFIG = {
     resource: null,
     urlState: false,
     highlightToday: true,
-    confirmMove: false,
+    moveMode: "save",
+    moves: null,
     returnParam: null,
     texts: TEXTS,
     options: { slotMinTime: "07:00" },
@@ -784,7 +785,7 @@ describe("a move, asked first", () => {
         const fetch = vi.fn(async () => ({ ok: true }));
         vi.stubGlobal("fetch", fetch);
         const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false);
-        page({ ...CONFIG, confirmMove: true });
+        page({ ...CONFIG, moveMode: "confirm" });
         await load();
         const changes = [];
         element().addEventListener("django-ec-calendar:event-change", (e) =>
@@ -984,5 +985,252 @@ describe("its business hours", () => {
             resource: { id: "2" },
         });
         expect(api.go).toHaveBeenCalledOnce();
+    });
+});
+
+describe("how a drag goes", () => {
+    const BATCH = {
+        ...CONFIG,
+        moveMode: "batch",
+        moves: "/admin/agenda/appointment/calendar/moves/",
+        texts: {
+            ...TEXTS,
+            save: "Save",
+            discard: "Discard",
+            pending: {
+                one: "%(count)s change not saved",
+                other: "%(count)s changes not saved",
+            },
+        },
+    };
+
+    const drop = (id, hour, extra = {}) => ({
+        event: {
+            id,
+            title: `Event ${id}`,
+            start: new Date(`2026-10-29T${hour}:00:00`),
+            end: null,
+            allDay: false,
+        },
+        revert: vi.fn(),
+        ...extra,
+    });
+
+    async function batch(config = BATCH) {
+        page(config);
+        await load();
+        const calendar = created.at(-1);
+        calendar.updateEvent = vi.fn();
+        calendar.refetchEvents = vi.fn();
+        return calendar;
+    }
+
+    const bar = () => element().querySelector(".django-ec-calendar-pending");
+    const button = (name) =>
+        element().querySelector(`.django-ec-calendar-${name}`);
+
+    it("off: not at all", async () => {
+        page({ ...CONFIG, moveMode: "off" });
+        await load();
+        expect(options().eventDrop).toBeUndefined();
+        expect(options().eventResize).toBeUndefined();
+    });
+
+    it("batch: kept, counted and marked, until saved together", async () => {
+        const fetch = vi.fn(async () => ({
+            ok: true,
+            json: async () => ({ events: [{ id: "1" }] }),
+        }));
+        vi.stubGlobal("fetch", fetch);
+        const calendar = await batch();
+        expect(bar().hidden).toBe(true);
+        const first = drop("1", "10");
+        await options().eventDrop(first);
+        expect(fetch).not.toHaveBeenCalled();
+        expect(bar().hidden).toBe(false);
+        expect(bar().textContent).toContain("1 change not saved");
+        expect(first.event.classNames).toEqual([
+            "django-ec-calendar-pending-event",
+        ]);
+        expect(calendar.updateEvent).toHaveBeenCalledWith(first.event);
+        // Moved again: the same change, not marked twice.
+        await options().eventDrop(drop("1", "11", { event: first.event }));
+        expect(calendar.updateEvent).toHaveBeenCalledOnce();
+        await options().eventResize(drop("2", "12"));
+        expect(bar().textContent).toContain("2 changes not saved");
+        const heard = [];
+        element().addEventListener("django-ec-calendar:batch-change", (e) =>
+            heard.push(e.detail),
+        );
+        button("save").click();
+        await vi.waitFor(() => expect(heard).toHaveLength(1));
+        const [url, init] = fetch.mock.calls[0];
+        expect(url).toBe(BATCH.moves);
+        expect(init.headers["Content-Type"]).toBe("application/json");
+        expect(JSON.parse(init.body).moves.map((m) => m.pk)).toEqual([
+            "1",
+            "2",
+        ]);
+        expect(heard[0]).toEqual({
+            saved: true,
+            events: [{ id: "1" }],
+            errors: {},
+        });
+        expect(bar().hidden).toBe(true);
+        expect(calendar.refetchEvents).toHaveBeenCalledOnce();
+    });
+
+    it("batch: what can't be saved stays, saying why", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockResolvedValueOnce({
+                    ok: false,
+                    json: async () => ({
+                        errors: { 1: "It's out of the business hours." },
+                    }),
+                })
+                .mockResolvedValueOnce({
+                    ok: false,
+                    json: async () => Promise.reject(),
+                })
+                .mockRejectedValueOnce(new Error("offline"))
+                .mockResolvedValueOnce({
+                    ok: true,
+                    json: async () => Promise.reject(),
+                }),
+        );
+        const calendar = await batch();
+        await options().eventDrop(drop("1", "15"));
+        const heard = [];
+        element().addEventListener("django-ec-calendar:batch-change", (e) =>
+            heard.push(e.detail),
+        );
+        button("save").click();
+        await vi.waitFor(() => expect(heard).toHaveLength(1));
+        expect(status().textContent).toBe("It's out of the business hours.");
+        expect(heard[0].saved).toBe(false);
+        expect(bar().hidden).toBe(false);
+        button("save").click();
+        await vi.waitFor(() => expect(heard).toHaveLength(2));
+        expect(status().textContent).toBe("Not saved");
+        button("save").click();
+        await vi.waitFor(() => expect(status().textContent).toBe("Not saved"));
+        button("save").click();
+        await vi.waitFor(() => expect(heard).toHaveLength(3));
+        expect(heard[2]).toEqual({ saved: true, events: [], errors: {} });
+        expect(calendar.refetchEvents).toHaveBeenCalledOnce();
+    });
+
+    it("batch: discarded, back where they are", async () => {
+        const calendar = await batch();
+        await options().eventDrop(drop("1", "10"));
+        button("discard").click();
+        expect(bar().hidden).toBe(true);
+        expect(calendar.refetchEvents).toHaveBeenCalledOnce();
+    });
+
+    it("batch: from where it was before all of them", async () => {
+        const fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }));
+        vi.stubGlobal("fetch", fetch);
+        await batch({
+            ...BATCH,
+            resource: {
+                param: "p",
+                empty: "__none__",
+                editable: true,
+                message: "",
+            },
+        });
+        const first = drop("1", "10", {
+            oldResource: { id: "1" },
+            newResource: { id: "2" },
+        });
+        await options().eventDrop(first);
+        await options().eventDrop(
+            drop("1", "11", {
+                event: first.event,
+                oldResource: { id: "2" },
+                newResource: { id: "3" },
+            }),
+        );
+        // In the same column, later: still from 1 to 3. (EventCalendar
+        // moves the same event.)
+        first.event.start = new Date("2026-10-29T12:00:00");
+        await options().eventDrop(drop("1", "12", { event: first.event }));
+        button("save").click();
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+        expect(JSON.parse(fetch.mock.calls[0][1].body).moves).toEqual([
+            {
+                pk: "1",
+                start: "2026-10-29T12:00:00",
+                end: "",
+                resource: "3",
+                resource_from: "1",
+            },
+        ]);
+    });
+
+    it("batch: leaving the page with some asks", async () => {
+        await batch();
+        const leave = () => {
+            const event = new Event("beforeunload", { cancelable: true });
+            window.dispatchEvent(event);
+            return event.defaultPrevented;
+        };
+        expect(leave()).toBe(false);
+        await options().eventDrop(drop("1", "10"));
+        expect(leave()).toBe(true);
+    });
+
+    it("the page does it: its move event, cancelled", async () => {
+        const fetch = vi.fn(async () => ({ ok: true }));
+        vi.stubGlobal("fetch", fetch);
+        const calendar = await batch();
+        let detail;
+        const take = (e) => {
+            e.preventDefault();
+            detail = e.detail;
+        };
+        element().addEventListener("django-ec-calendar:move", take);
+        const info = drop("1", "10");
+        await options().eventDrop(info);
+        expect(detail.mode).toBe("batch");
+        expect(detail.event).toBe(info.event);
+        expect(bar().hidden).toBe(true); // Not kept: the page decides.
+        detail.revert();
+        expect(info.revert).toHaveBeenCalledOnce();
+        detail.pend();
+        expect(bar().hidden).toBe(false);
+        await detail.save();
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(calendar.updateEvent).toHaveBeenCalledOnce();
+        element().removeEventListener("django-ec-calendar:move", take);
+    });
+
+    it("pend without where to save them together: saved now", async () => {
+        const fetch = vi.fn(async () => ({ ok: true }));
+        vi.stubGlobal("fetch", fetch);
+        page({ ...CONFIG, moveMode: "batch", moves: null });
+        await load();
+        await options().eventDrop(drop("1", "10"));
+        expect(fetch).toHaveBeenCalledOnce();
+    });
+
+    it("a plural form it hasn't: the other", async () => {
+        await batch({ ...BATCH, locale: "ru" }); // 2: "few".
+        await options().eventDrop(drop("1", "10"));
+        await options().eventDrop(drop("2", "11"));
+        expect(bar().textContent).toContain("2 changes not saved");
+    });
+
+    it("counted in the page's language", async () => {
+        await batch({
+            ...BATCH,
+            texts: { ...BATCH.texts, pending: undefined },
+        });
+        await options().eventDrop(drop("1", "10"));
+        expect(bar().textContent).toContain("1");
     });
 });

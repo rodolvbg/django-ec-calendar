@@ -14,7 +14,7 @@ class ByAttendees(CalendarAdminMixin, admin.ModelAdmin):
     calendar_duration_field = "length"
     calendar_resource_field = "attendees"
     calendar_detail_fields = ("host", "online", "day", "kind", "where")
-    calendar_editable = True
+    calendar_move_mode = "save"
 
     @admin.display(description="Place")
     def where(self, obj):

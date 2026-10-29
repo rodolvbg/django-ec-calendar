@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from django.forms import Media
 from django.middleware.csrf import get_token
 from django.utils import formats, timezone
-from django.utils.translation import get_language, gettext
+from django.utils.translation import get_language, gettext, ngettext
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -81,6 +81,17 @@ def calendar_texts() -> dict[str, Any]:
         # %(count)s: how many more there are that day.
         "more": gettext("+%(count)s more"),
         "saving": gettext("Saving…"),
+        "save": gettext("Save"),
+        "discard": gettext("Discard"),
+        # How many moves wait to be saved (calendar_move_mode "batch").
+        "pending": {
+            "one": ngettext(
+                "%(count)s change not saved", "%(count)s changes not saved", 1
+            ),
+            "other": ngettext(
+                "%(count)s change not saved", "%(count)s changes not saved", 2
+            ),
+        },
         "failed": gettext("Not saved"),
         # %(title)s: the event's.
         "confirmMove": gettext("Save the new dates of “%(title)s”?"),
@@ -116,12 +127,13 @@ def calendar_config(
     views: Sequence[str] = (),
     add: str | None = None,
     move: str | None = None,
+    moves: str | None = None,
+    move_mode: str = "off",
     dates_only: bool = False,
     resources: Sequence[Mapping[str, Any]] | Mapping[str, Any] | None = None,
     resource: Mapping[str, Any] | None = None,
     url_state: bool = True,
     highlight_today: bool = True,
-    confirm_move: bool = False,
     outside_hours: str = "shade",
     return_param: str | None = None,
     options: Mapping[str, Any] | None = None,
@@ -137,7 +149,8 @@ def calendar_config(
     whether the view and its date go in the page's URL (``ec-view``,
     ``ec-date``), and are read from it.
     ``highlight_today``: whether today is tinted (never in a day's view).
-    ``confirm_move``: whether a move asks first. ``outside_hours``: out of the
+    ``move_mode``: how a drag goes (``"off"``, ``"save"``, ``"confirm"``,
+    ``"batch"``: kept, and saved together at ``moves``). ``outside_hours``: out of the
     business hours (its background events), ``"shade"`` or ``"block"`` (not
     to be selected, nor moved to). ``return_param``: the
     parameter that takes the calendar's URL to the pages it opens (to come
@@ -157,7 +170,8 @@ def calendar_config(
         "resource": dict(resource) if resource else None,
         "urlState": url_state,
         "highlightToday": highlight_today,
-        "confirmMove": confirm_move,
+        "moves": moves,
+        "moveMode": move_mode,
         "outsideHours": outside_hours,
         "returnParam": return_param,
         "locale": language,

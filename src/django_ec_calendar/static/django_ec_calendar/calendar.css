@@ -100,3 +100,33 @@
     justify-content: flex-end;
     margin-bottom: 1rem;
 }
+
+/* Moves waiting to be saved together (calendar_move_mode "batch"): how
+   many, and saving or discarding them; and each, dashed. */
+.django-ec-calendar-pending {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    background: color-mix(
+        in oklab,
+        var(--ec-event-bg-color, #2563eb) 12%,
+        transparent
+    );
+}
+
+.django-ec-calendar-pending[hidden] {
+    display: none;
+}
+
+.django-ec-calendar-pending > span {
+    margin-inline-end: auto;
+}
+
+.django-ec-calendar .django-ec-calendar-pending-event {
+    outline: 2px dashed currentColor;
+    outline-offset: -2px;
+}

@@ -51,8 +51,8 @@ class _AdminE2ETestCase(StaticLiveServerTestCase):
         from django.contrib import admin
 
         model_admin = admin.site._registry[model]
-        model_admin.calendar_editable = True
-        self.addCleanup(delattr, model_admin, "calendar_editable")
+        model_admin.calendar_move_mode = "confirm"
+        self.addCleanup(delattr, model_admin, "calendar_move_mode")
 
     def tearDown(self) -> None:
         # Close the page before the test database is flushed (after
@@ -326,6 +326,8 @@ class TestHolidays(_AdminE2ETestCase):
 class TestAppointments(_AdminE2ETestCase):
     """A column per professional (resourceTimeGridDay), today."""
 
+    mode = "confirm"
+
     def setUp(self) -> None:
         super().setUp()
         from django.contrib import admin
@@ -339,10 +341,13 @@ class TestAppointments(_AdminE2ETestCase):
         model_admin.get_calendar_closed = lambda *args, **kwargs: ()
         # Its morning in sight.
         model_admin.calendar_options = {"slotMinTime": "08:00", "slotMaxTime": "20:00"}
+        # Asked first (TestBatch: several, then saved together).
+        model_admin.calendar_move_mode = self.mode
         for name in (
             "get_calendar_business_hours",
             "get_calendar_closed",
             "calendar_options",
+            "calendar_move_mode",
         ):
             self.addCleanup(delattr, model_admin, name)
         self.ana = Professional.objects.create(name="Ana")
@@ -472,6 +477,98 @@ class TestHours(TestAppointments):
     test_back_where_it_was_after_a_save = None
     test_its_filters_keep_its_place = None
     test_dragged_to_another_professional = None
+
+
+class TestBatch(TestAppointments):
+    """Several moved, then saved together, or discarded."""
+
+    mode = "batch"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.lucia = Appointment.objects.create(
+            client="Lucía",
+            professional=self.ana,
+            start=self.maria.start + datetime.timedelta(hours=2),
+            minutes=60,
+        )
+
+    def drag(self, name: str, to: str) -> None:
+        page = self.page
+        box = page.locator(".ec-event", has_text=name).bounding_box()
+        assert box is not None
+        column = self.column(to)
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 5)
+        page.mouse.down()
+        page.mouse.move(column["x"] + column["width"] / 2, box["y"] + 5, steps=15)
+        page.mouse.up()
+
+    def test_kept_until_saved_together(self):
+        self.open()
+        page = self.page
+        bar = page.locator(".django-ec-calendar-pending")
+        expect(bar).to_be_hidden()
+        self.drag("María", "Luis")
+        expect(bar).to_contain_text("1 change not saved")
+        expect(page.locator(".django-ec-calendar-pending-event")).to_have_count(1)
+        self.drag("Lucía", "Luis")
+        expect(bar).to_contain_text("2 changes not saved")
+        self.maria.refresh_from_db()
+        assert self.maria.professional == self.ana  # Not yet.
+        assert self.dialogs == []  # Not asked.
+        bar.locator("button", has_text="Save").click()
+        expect(bar).to_be_hidden()
+        expect(page.locator(".django-ec-calendar-pending-event")).to_have_count(0)
+        self.maria.refresh_from_db()
+        self.lucia.refresh_from_db()
+        assert (self.maria.professional, self.lucia.professional) == (
+            self.luis,
+            self.luis,
+        )
+
+    def test_discarded(self):
+        self.open()
+        page = self.page
+        self.drag("María", "Luis")
+        page.locator(".django-ec-calendar-pending button", has_text="Discard").click()
+        expect(page.locator(".django-ec-calendar-pending")).to_be_hidden()
+        event = page.locator(".ec-event", has_text="María")
+        ana = self.column("Ana")
+
+        def in_anas_column() -> bool:
+            box = event.bounding_box()
+            return bool(box and ana["x"] <= box["x"] < ana["x"] + ana["width"])
+
+        # Back, once its events are fetched again.
+        for _ in range(50):
+            if in_anas_column():
+                break
+            page.wait_for_timeout(100)
+        assert in_anas_column()
+        self.maria.refresh_from_db()
+        assert self.maria.professional == self.ana
+
+    def test_none_saved_when_one_cant_be(self):
+        self.open()
+        page = self.page
+        self.drag("María", "Luis")
+        self.drag("Lucía", "Luis")
+        Appointment.objects.filter(pk=self.lucia.pk).delete()  # Meanwhile.
+        bar = page.locator(".django-ec-calendar-pending")
+        bar.locator("button", has_text="Save").click()
+        expect(page.locator(".django-ec-calendar-status")).to_have_text(
+            "It doesn't exist any more."
+        )
+        expect(bar).to_contain_text("2 changes not saved")
+        self.maria.refresh_from_db()
+        assert self.maria.professional == self.ana
+
+    # Its other tests ask first.
+    test_dragged_to_another_professional = None
+    test_a_move_one_says_no_to_goes_back = None
+    test_its_details_and_no_tint_in_a_day = None
+    test_back_where_it_was_after_a_save = None
+    test_its_filters_keep_its_place = None
 
 
 class TestPage(_AdminE2ETestCase):

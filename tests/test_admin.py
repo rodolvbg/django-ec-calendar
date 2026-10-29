@@ -116,7 +116,8 @@ class TestCalendarPage:
         assert data["resource"] is None
         assert data["urlState"] is True
         assert data["highlightToday"] is True
-        assert data["confirmMove"] is True
+        assert data["moveMode"] == "confirm"
+        assert data["moves"] is None  # Not "batch".
         assert data["returnParam"] == "_ec_calendar"
         assert data["locale"] == "en-us"
         assert data["firstDay"] == 0
@@ -155,7 +156,7 @@ class TestCalendarPage:
 
     def test_without_moves_or_adding(self, superuser, rf):
         class ReadOnly(BookingAdmin):
-            calendar_editable = False
+            calendar_move_mode = "off"
             calendar_selectable = False
 
         request = rf.get("/")
@@ -306,7 +307,7 @@ class TestMove:
         assert superuser.get(MOVE).status_code == 405
 
     def test_days(self, superuser, monkeypatch):
-        monkeypatch.setattr(admin.site._registry[Holiday], "calendar_editable", True)
+        monkeypatch.setattr(admin.site._registry[Holiday], "calendar_move_mode", "save")
         holiday = Holiday.objects.create(
             name="Retreat", first_day=datetime.date(2026, 10, 28)
         )
