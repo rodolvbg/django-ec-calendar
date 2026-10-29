@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `CalendarView`: a calendar on your own pages with all the admin's does —
+  moving (`"save"`, `"confirm"`, `"batch"`), adding with the dates,
+  resources, business hours — by the user's model permissions (each
+  overridable), saving with `obj.save()`. `urls(name)` gives its page and
+  its endpoints; `calendar_for()`, its calendar for another page.
+- `CalendarMixin`: what a calendar does wherever it is (the admin's and
+  `CalendarView`'s), its hooks: `get_calendar_urls()`,
+  `has_calendar_view_permission()`, `save_calendar_object()`,
+  `log_calendar_move()`, `get_calendar_initial()`…
+- `Calendar`: a calendar to show in any template (`{{ calendar.media }}`,
+  `{{ calendar }}`); `get_calendar(request)` of a view.
+
+### Changed
+
+- `CalendarAdminMixin` is `CalendarMixin` with the admin's permissions,
+  changelist, saves and log: the same options and methods as before.
+- A detail `get_<field>_display` is labelled by its field.
+
 ### Fixed
 
 - A move saved at once or after asking (`calendar_move_mode` `"save"`,

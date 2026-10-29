@@ -31,3 +31,8 @@ class Meeting(models.Model):
 
     def get_absolute_url(self) -> str:
         return f"/meetings/{self.pk}/"
+
+    def get_place_display(self) -> str:
+        return "Online" if self.online else "Office"
+
+    get_place_display.short_description = "Where"  # type: ignore[attr-defined]

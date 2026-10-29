@@ -7,7 +7,7 @@
 [![PyPI - Django Version](https://img.shields.io/pypi/djversions/django-ec-calendar)](https://pypi.org/project/django-ec-calendar/)
 [![Downloads](https://static.pepy.tech/personalized-badge/django-ec-calendar?period=month&units=international_system&left_color=black&right_color=blue&left_text=Downloads/month)](https://pepy.tech/project/django-ec-calendar)
 
-A calendar for the Django admin and your own pages, with
+A calendar for the Django admin and your own pages alike, with
 [EventCalendar](https://github.com/vkurko/calendar) (by vkurko, MIT): a
 changelist's objects by date — opened with a click, added by selecting the
 dates, moved and resized by dragging — in Django's admin and in
@@ -307,7 +307,66 @@ Unfold's), else the system's.
 
 ## On your pages
 
-A view with the events, as the calendar asks for them:
+Not only the admin's: everything above — its fields, resources, business
+hours, dragging (`"save"`, `"confirm"`, `"batch"`), each option's method
+taking the request — is `CalendarMixin`'s, and `CalendarView` is it on a
+page of your own, with your templates, your site's styles, Bootstrap,
+Tailwind, HTMX…
+
+```python
+from django_ec_calendar import CalendarView
+
+
+class ProfessionalAgenda(CalendarView):
+    calendar_start_field = "start"
+    calendar_duration_field = "minutes"
+    calendar_move_mode = "confirm"
+    calendar_add_url = "appointment-add"  # a URL's name, or a path
+    template_name = "agenda/agenda.html"  # optional
+
+    def get_queryset(self):  # or model, or queryset
+        return Appointment.objects.filter(professional=self.kwargs["pk"])
+```
+
+```python
+urlpatterns = [
+    # Its page ("agenda"), and its endpoints under it ("agenda-events",
+    # "agenda-move", "agenda-moves").
+    path("agenda/<int:pk>/", include(ProfessionalAgenda.urls("agenda"))),
+]
+```
+
+```django
+{# agenda/agenda.html #}
+{% extends "base.html" %}
+{% block head %}{{ calendar.media }}{% endblock %}
+{% block content %}<h1>{{ title }}</h1>{{ calendar }}{% endblock %}
+```
+
+- **Who may do what** are the user's model permissions, by default: to
+  see it, `view_` or `change_`; to move, `change_` (and a move mode); to
+  add from it, `add_` (and `calendar_add_url`). Override
+  `has_calendar_view_permission(request)`,
+  `has_calendar_move_permission(request, obj=None)` and
+  `has_calendar_add_permission(request)` for yours (a public calendar, each
+  professional their own…).
+- **A move is saved** with `obj.save()` (`save_calendar_object()`), after
+  the same checks as the admin's; `log_calendar_move()` to log it.
+- **Its add page** gets the dates (and the resource) as `?start=&end=`:
+  `initial=agenda.get_calendar_initial(request)` gives them as its fields
+  take them.
+- **On another page**, its calendar is
+  `ProfessionalAgenda.calendar_for(request, url, pk=3)` (`url`: its page's,
+  where its endpoints are).
+
+### A calendar, anywhere
+
+`Calendar(config)` is a calendar to show in any template: `{{ calendar.media }}`
+in `<head>`, and `{{ calendar }}`. A view's is `get_calendar(request)`.
+
+### Only events
+
+A view with only the events (read-only), and the calendar in a template:
 
 ```python
 from django_ec_calendar import EventFeedView
@@ -318,19 +377,10 @@ class BookingEvents(EventFeedView):
     calendar_start_field = "start"
     calendar_end_field = "end"
     calendar_color_field = "color"
-```
 
-```python
+
 urlpatterns = [path("events/", BookingEvents.as_view(), name="booking-events")]
 ```
-
-Each event leads to the object's `get_absolute_url()` (override
-`get_calendar_event_url(obj)`). Who may see them is the view's own
-business: `LoginRequiredMixin`, `get_queryset()`… The fields above work
-here too; with `calendar_resource_field`, `?resources=1` answers its
-resources.
-
-And the calendar, in a template:
 
 ```django
 {% load ec_calendar %}
@@ -344,11 +394,15 @@ And the calendar, in a template:
 </body>
 ```
 
+Each event leads to the object's `get_absolute_url()` (override
+`get_calendar_event_url(obj)`). Who may see them is the view's own
+business: `LoginRequiredMixin`, `get_queryset()`… With
+`calendar_resource_field`, `?resources=1` answers its resources.
+
 `views` are separated by spaces (empty: none to switch to);
 `resources=True` fetches the resources from the same view; `url_state=False`
 leaves the page's URL alone, and `highlight_today=False` never tints today.
-Any other keyword is one of EventCalendar's options. On a page it's
-read-only.
+Any other keyword is one of EventCalendar's options.
 
 ![A calendar on a page](docs/screenshots/calendar-page.png)
 

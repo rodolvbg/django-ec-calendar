@@ -1,14 +1,19 @@
 """A calendar for the Django admin and your pages, with EventCalendar."""
 
-from .admin import CalendarAdminMixin, CalendarMove, CalendarMoveError
+from .admin import CalendarAdminMixin
+from .core import CalendarMixin, CalendarMove, CalendarMoveError
 from .source import CalendarSource
-from .views import EventFeedView
+from .views import CalendarView, EventFeedView
+from .widget import Calendar
 
 __all__ = [
+    "Calendar",
     "CalendarAdminMixin",
+    "CalendarMixin",
     "CalendarMove",
     "CalendarMoveError",
     "CalendarSource",
+    "CalendarView",
     "EventFeedView",
 ]
 

@@ -571,6 +571,38 @@ class TestBatch(TestAppointments):
     test_its_filters_keep_its_place = None
 
 
+class TestProfessionalAgenda(_AdminE2ETestCase):
+    """A CalendarView: a professional's agenda, out of the admin."""
+
+    def test_moved_on_its_own_page(self):
+        ana = Professional.objects.create(name="Ana")
+        start = timezone.make_aware(
+            datetime.datetime.combine(timezone.localdate(), datetime.time(9))
+        )
+        maria = Appointment.objects.create(
+            client="María", professional=ana, start=start, minutes=60
+        )
+        self.login()
+        page = self.page
+        page.goto(f"{self.live_server_url}/agenda/{ana.pk}/")
+        expect(page.locator("h1")).to_have_text("Agenda: Ana")
+        event = page.locator(".ec-event", has_text="María")
+        expect(event).to_contain_text("9:00")
+        box = event.bounding_box()
+        assert box is not None
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 5)
+        page.mouse.down()
+        page.mouse.move(
+            box["x"] + box["width"] / 2, box["y"] + 5 + box["height"], steps=12
+        )
+        page.mouse.up()
+        expect(event).to_contain_text("10:00")
+        page.wait_for_timeout(400)
+        assert self.dialogs == ["Save the new dates of “María”?"]
+        maria.refresh_from_db()
+        assert maria.start == start + datetime.timedelta(hours=1)
+
+
 class TestPage(_AdminE2ETestCase):
     def test_a_calendar_on_a_page(self):
         call = self.book("Client call", 1, 10, 12)

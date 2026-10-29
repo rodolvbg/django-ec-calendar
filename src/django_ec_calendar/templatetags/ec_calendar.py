@@ -8,18 +8,15 @@
 
 from __future__ import annotations
 
-from itertools import count
 from typing import Any
 
 from django import template
-from django.template.loader import render_to_string
 from django.utils.safestring import SafeString
 
 from ..config import calendar_config, calendar_media
+from ..widget import Calendar
 
 register = template.Library()
-
-_ids = count(1)
 
 
 @register.simple_tag
@@ -59,10 +56,4 @@ def ec_calendar(
         highlight_today=highlight_today,
         options=options,
     )
-    element = id or f"ec-calendar-{next(_ids)}"
-    return SafeString(
-        render_to_string(
-            "django_ec_calendar/calendar.html",
-            {"id": element, "config": config},
-        )
-    )
+    return Calendar(config, id=id).render()

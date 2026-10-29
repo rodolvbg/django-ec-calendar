@@ -11,6 +11,7 @@ end date is the last day.
 from __future__ import annotations
 
 import datetime
+import re
 from typing import TYPE_CHECKING, Any
 
 from django.contrib.admin.utils import label_for_field, lookup_field
@@ -262,9 +263,22 @@ class CalendarSource:
             field, attr, value = lookup_field(name, obj, self)  # type: ignore[arg-type]
             text = display_value(value, field)
             if text:
-                label = label_for_field(name, type(obj), self)  # type: ignore[call-overload]
-                details.append({"label": str(label), "value": text})
+                details.append(
+                    {"label": self._detail_label(name, type(obj)), "value": text}
+                )
         return details
+
+    def _detail_label(self, name: str, model: type[Model]) -> str:
+        """A detail's label: its field's (``get_<field>_display``, a choice's
+        field's too), or ``list_display``'s."""
+        display = re.fullmatch(r"get_(\w+)_display", name)
+        if display:
+            try:
+                field = model._meta.get_field(display.group(1))
+                return str(getattr(field, "verbose_name", display.group(1)))
+            except FieldDoesNotExist:
+                pass
+        return str(label_for_field(name, model, self))  # type: ignore[call-overload]
 
     def get_calendar_event(self, request: HttpRequest, obj: Model) -> dict[str, Any]:
         """``obj`` as an EventCalendar event."""

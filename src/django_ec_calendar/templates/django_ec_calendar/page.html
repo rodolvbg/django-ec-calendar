@@ -1,0 +1,16 @@
+{# A CalendarView's page, as it is: your own (template_name) extends yours. #}
+<!doctype html>
+<html lang="{{ LANGUAGE_CODE|default:'en' }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title }}</title>
+    {{ calendar.media }}
+  </head>
+  <body>
+    <main>
+      <h1>{{ title }}</h1>
+      {{ calendar }}
+    </main>
+  </body>
+</html>
