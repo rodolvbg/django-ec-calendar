@@ -1,14 +1,18 @@
 {% extends "admin/base_site.html" %}
-{% load admin_urls i18n %}
+{% load admin_list admin_urls i18n static %}
 
-{% block extrastyle %}{{ block.super }}{{ media.css }}{% endblock %}
+{% block extrastyle %}
+  {{ block.super }}
+  {% if not unfold %}<link rel="stylesheet" href="{% static 'admin/css/changelists.css' %}">{% endif %}
+  {{ media.css }}
+{% endblock extrastyle %}
 
 {% block extrahead %}{{ block.super }}{{ media.js }}{% endblock %}
 
 {% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-list django-ec-calendar-page{% endblock %}
 
 {% block breadcrumbs %}
-  {% if breadcrumbs_list %}
+  {% if django_6 %}
     <ol class="breadcrumbs">
       <li><a href="{% url 'admin:index' %}">{% translate "Home" %}</a></li>
       <li><a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a></li>
@@ -43,6 +47,34 @@
         {% endif %}
       </ul>
     {% endif %}
-    {% include "django_ec_calendar/calendar.html" with id="django-ec-calendar" config=calendar %}
+    {# The changelist's filters and search: they keep the calendar's view and date. #}
+    <div data-django-ec-calendar-keep-state>
+      {% if unfold and cl %}
+        <div class="flex flex-col flex-wrap gap-3 mb-4 sm:flex-row empty:hidden">
+          {% search_form cl %}
+          {% include "unfold/helpers/change_list_filter_horizontal.html" %}
+          {% include "unfold/helpers/change_list_filter_button.html" %}
+        </div>
+        <div class="flex flex-row gap-4">
+          <div class="grow min-w-0">
+            {% include "django_ec_calendar/calendar.html" with id="django-ec-calendar" config=calendar %}
+          </div>
+          {% include "unfold/helpers/change_list_filter_vertical.html" %}
+        </div>
+      {% elif cl %}
+        <div class="module{% if cl.has_filters %} filtered{% endif %}" id="changelist">
+          <div class="changelist-form-container">
+            {% if django_6 %}{% include "django_ec_calendar/admin/filters.html" %}{% endif %}
+            <div>
+              {% search_form cl %}
+              {% include "django_ec_calendar/calendar.html" with id="django-ec-calendar" config=calendar %}
+            </div>
+          </div>
+          {% if not django_6 %}{% include "django_ec_calendar/admin/filters.html" %}{% endif %}
+        </div>
+      {% else %}
+        {% include "django_ec_calendar/calendar.html" with id="django-ec-calendar" config=calendar %}
+      {% endif %}
+    </div>
   </div>
 {% endblock content %}

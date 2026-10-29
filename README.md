@@ -55,46 +55,62 @@ class BookingAdmin(CalendarAdminMixin, admin.ModelAdmin):
 
 The changelist gets a "Calendar" link, next to "Add":
 
-- **What it shows** is what the changelist would: its `get_queryset()`, and
-  the filters and search it had when the link was followed. One query per
-  range the calendar shows.
+- **What it shows** is `get_calendar_queryset(request)`: what the changelist
+  would (its `get_queryset()`, filters and search). Override it, calling
+  `super()`, to restrict the calendar only. One query per range the
+  calendar shows.
+- **Its filters and search**: the changelist's, around it
+  (`calendar_filters = False`: not). Filtering by a resource shows only its
+  column.
 - **A click** on an event opens its change page (read-only, for those who
-  may only view it).
-- **Selecting dates** (or clicking one) opens the add page with them, for
-  those who may add (`calendar_selectable = False`: not). A click starts
-  at its slot's start (9:20 in half-hour slots: 9:00).
-- **Dragging** an event, or its end, saves its dates, for those who may
-  change it (`calendar_editable = False`: not). The move is checked by the
-  model (`full_clean()` of its dates, and its `clean()`), saved through
-  `save_model()` and logged as the admin's changes are; what can't be
-  saved goes back, saying why.
+  may only view it); after a save, back to the calendar, where it was.
+- **Selecting dates** (or clicking one) opens the add page with them, and
+  the column's resource, for those who may add (`calendar_selectable =
+  False`: not). A click starts at its slot's start (9:20 in half-hour
+  slots: 9:00).
+- **Dragging** is off by default: a slip of the mouse would change an
+  appointment. With `calendar_editable = True`, dragging an event, or its
+  end, saves its dates (and its resource), asking first
+  (`calendar_confirm_move = False`: not), for those who may change it. The
+  move is checked by the model (`full_clean()` of what it changes, and its
+  `clean()`), saved through `save_model()` and logged as the admin's
+  changes are; what can't be saved goes back, saying why.
+- **Where it was**: its view and date are in the page's URL (`ec-view`,
+  `ec-date`), so the back button, a save, the filters and a shared link
+  open it there (`calendar_url_state = False`: not).
 - **Its views**: `calendar_views` — by default month, week, day and list
   (`dayGridMonth`, `timeGridWeek`, `timeGridDay`, `listMonth`; any of
-  [EventCalendar's](https://github.com/vkurko/calendar#view)).
+  [EventCalendar's](https://github.com/vkurko/calendar#view), the
+  resources' and timelines' included, all translated).
+- **Today** is tinted, but not in a day's view (`calendar_highlight_today =
+  False`: never).
 
 ### In the menu
 
-The calendar's URL is `admin:<app>_<model>_calendar`; in Unfold's sidebar,
-for instance:
+The calendar's URL is `admin:<app>_<model>_calendar`. In Unfold's sidebar,
+`calendar_navigation()` gives a model's list and its calendar, each marked
+active on its own page (Unfold would mark the list active on both):
 
 ```python
+from django_ec_calendar.unfold import calendar_navigation
+
 UNFOLD = {
     "SIDEBAR": {
         "navigation": [
             {
                 "title": "Agenda",
-                "items": [
-                    {
-                        "title": "Calendar",
-                        "icon": "calendar_month",
-                        "link": reverse_lazy("admin:agenda_booking_calendar"),
-                    },
-                ],
+                "items": calendar_navigation(
+                    "agenda.Appointment", calendar_title="Appointments' calendar"
+                ),
             },
         ],
     },
 }
 ```
+
+`calendar_item()` and `changelist_item()` are each of them alone (with
+`title`, `icon` and `site`); both are only for those who may view or
+change the model's objects.
 
 ### Its fields
 
@@ -102,13 +118,55 @@ UNFOLD = {
 |---|---|
 | `calendar_start_field` | A `DateTimeField` (events at a time) or a `DateField` (all-day events). Required. |
 | `calendar_end_field` | Where it ends (none: it lasts no time, or its day; it can't be resized). |
+| `calendar_duration_field` | How long it lasts, instead of an end: minutes (an integer field) or a `DurationField`. Resizing changes it. Events that start up to `calendar_max_duration` (a day) before the calendar's range are looked for. |
 | `calendar_all_day_field` | A `BooleanField`: true, an all-day event of a `DateTimeField`. |
 | `calendar_title_field` | Its title (none: `str(obj)`). |
 | `calendar_color_field` | Its color, a CSS color (none: the admin's). |
+| `calendar_detail_fields` | More lines of text under its title: fields, methods or properties of the model, or the admin's methods, as in `list_display` (`("room", "get_status_display")`). Text only, never HTML. |
+| `calendar_resource_field` | Its resource: a `ForeignKey`, a `ManyToManyField` (in several) or a field with `choices`. See below. |
 
 `get_calendar_event(request, obj)` makes the whole event (any of
 [EventCalendar's event](https://github.com/vkurko/calendar#event-object)
 properties), calling `super()`.
+
+### Resources
+
+With `calendar_resource_field`, the resource views (`resourceTimeGridDay`,
+`resourceTimeGridWeek`, `resourceTimelineDay`… in `calendar_views`) have a
+column, or a row, per resource:
+
+```python
+@admin.register(Appointment)
+class AppointmentAdmin(CalendarAdminMixin, admin.ModelAdmin):
+    list_filter = ("professional", "status")
+    calendar_start_field = "start"
+    calendar_duration_field = "minutes"
+    calendar_resource_field = "professional"
+    calendar_detail_fields = ("get_status_display",)
+    calendar_view = "resourceTimeGridDay"
+    calendar_views = ("resourceTimeGridDay", "resourceTimeGridWeek", "listWeek")
+    calendar_editable = True
+
+    def get_calendar_queryset(self, request):
+        # The calendar only: not the cancelled ones.
+        return super().get_calendar_queryset(request).exclude(status="cancelled")
+```
+
+- **The resources** are the objects a foreign key or a many-to-many field
+  may point to (its `limit_choices_to`), or a field's choices; and, when an
+  event may have none (a nullable or blank field), one more for those:
+  "No professional" (`calendar_resource_empty_label`). Override
+  `get_calendar_resources(request)` for others (`{id, title}`, any of
+  [EventCalendar's](https://github.com/vkurko/calendar#resource-object)).
+- **Each event** is in its own (`resourceIds`; with many-to-many, in each).
+- **Adding** in a column fills its resource (`?professional=3`).
+- **Dragging** to another column changes its resource too, checked as the
+  rest; with many-to-many, from the one it was dragged from to the other
+  (`calendar_resource_editable = False`: its resource can't change).
+
+![A day of appointments, a column per professional](docs/screenshots/calendar-resources.png)
+
+### Days
 
 A `DateField`'s end is the last day (EventCalendar's is the day after: it's
 converted both ways).
@@ -154,7 +212,9 @@ urlpatterns = [path("events/", BookingEvents.as_view(), name="booking-events")]
 
 Each event leads to the object's `get_absolute_url()` (override
 `get_calendar_event_url(obj)`). Who may see them is the view's own
-business: `LoginRequiredMixin`, `get_queryset()`…
+business: `LoginRequiredMixin`, `get_queryset()`… The fields above work
+here too; with `calendar_resource_field`, `?resources=1` answers its
+resources.
 
 And the calendar, in a template:
 
@@ -170,8 +230,11 @@ And the calendar, in a template:
 </body>
 ```
 
-`views` are separated by spaces (empty: none to switch to); any other
-keyword is one of EventCalendar's options. On a page it's read-only.
+`views` are separated by spaces (empty: none to switch to);
+`resources=True` fetches the resources from the same view; `url_state=False`
+leaves the page's URL alone, and `highlight_today=False` never tints today.
+Any other keyword is one of EventCalendar's options. On a page it's
+read-only.
 
 ![A calendar on a page](docs/screenshots/calendar-page.png)
 
@@ -184,8 +247,8 @@ which bubbles and can be cancelled — `preventDefault()`, and it isn't done
 | Event | `detail` | Otherwise |
 |---|---|---|
 | `django-ec-calendar:event-click` | `event` (EventCalendar's), `url`, `jsEvent` | Opens `url`. |
-| `django-ec-calendar:date-click` | `start`, `allDay`, `jsEvent` | Opens the add page. |
-| `django-ec-calendar:select` | `start`, `end`, `allDay`, `jsEvent` | Opens the add page. |
+| `django-ec-calendar:date-click` | `start`, `allDay`, `resource`, `jsEvent` | Opens the add page. |
+| `django-ec-calendar:select` | `start`, `end`, `allDay`, `resource`, `jsEvent` | Opens the add page. |
 | `django-ec-calendar:event-change` | `event`, `saved`, `error` | (After a move; not cancellable.) |
 
 ```js

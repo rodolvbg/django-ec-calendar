@@ -43,3 +43,38 @@ class Holiday(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class Professional(models.Model):
+    name = models.CharField(max_length=100)
+    active = models.BooleanField(default=True)
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Appointment(models.Model):
+    """A professional's (or nobody's yet), for some minutes."""
+
+    class Status(models.TextChoices):
+        BOOKED = "booked", "Booked"
+        CONFIRMED = "confirmed", "Confirmed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    client = models.CharField(max_length=100)
+    professional = models.ForeignKey(
+        Professional,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        limit_choices_to={"active": True},
+        related_name="appointments",
+    )
+    start = models.DateTimeField()
+    minutes = models.PositiveIntegerField(default=30)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.BOOKED
+    )
+
+    def __str__(self) -> str:
+        return self.client

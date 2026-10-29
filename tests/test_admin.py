@@ -110,7 +110,14 @@ class TestCalendarPage:
         assert data["csrfToken"]
         assert data["datesOnly"] is False
         assert data["options"] == {"slotMinTime": "07:00", "slotMaxTime": "21:00"}
-        assert data["texts"]["today"] == "Today"
+        assert data["texts"]["buttons"]["today"] == "Today"
+        assert data["texts"]["labels"]["Next week"] == "Next week"
+        assert data["resources"] is None
+        assert data["resource"] is None
+        assert data["urlState"] is True
+        assert data["highlightToday"] is True
+        assert data["confirmMove"] is True
+        assert data["returnParam"] == "_ec_calendar"
         assert data["locale"] == "en-us"
         assert data["firstDay"] == 0
         assert "Calendar of bookings" in html
@@ -130,7 +137,9 @@ class TestCalendarPage:
         data = config(html)
         assert data["locale"] == "es"
         assert data["firstDay"] == 1
-        assert data["texts"]["today"] == "Hoy"
+        assert data["texts"]["buttons"]["today"] == "Hoy"
+        assert data["texts"]["buttons"]["resourceTimelineYear"] == "Año"
+        assert data["texts"]["labels"]["Next week"] == "Semana siguiente"
         assert "Calendario de bookings" in html
 
     def test_who_may_only_view(self, blue):
@@ -296,7 +305,8 @@ class TestMove:
     def test_only_posted(self, superuser):
         assert superuser.get(MOVE).status_code == 405
 
-    def test_days(self, superuser):
+    def test_days(self, superuser, monkeypatch):
+        monkeypatch.setattr(admin.site._registry[Holiday], "calendar_editable", True)
         holiday = Holiday.objects.create(
             name="Retreat", first_day=datetime.date(2026, 10, 28)
         )
@@ -309,6 +319,22 @@ class TestMove:
             datetime.date(2026, 11, 2),
             datetime.date(2026, 11, 4),
         )
+
+    def test_off_by_default(self, superuser):
+        holiday = Holiday.objects.create(
+            name="Retreat", first_day=datetime.date(2026, 10, 28)
+        )
+        html = superuser.get("/admin/agenda/holiday/calendar/").content.decode()
+        assert config(html)["move"] is None
+        [event] = superuser.get(
+            "/admin/agenda/holiday/calendar/events/", {"start": "2026-10-26"}
+        ).json()
+        assert event["editable"] is False
+        response = superuser.post(
+            "/admin/agenda/holiday/calendar/move/",
+            {"pk": holiday.pk, "start": "2026-11-02", "end": "2026-11-03"},
+        )
+        assert response.status_code == 403
 
 
 class TestAddFromTheCalendar:

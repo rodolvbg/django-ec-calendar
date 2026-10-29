@@ -107,3 +107,42 @@ def test_the_sites_time_zone(settings):
         assert site_time_zone() == "+05:30"
     settings.USE_TZ = False
     assert site_time_zone() == "local"
+
+
+def test_the_feeds_resources(client, db):
+    from agenda.models import Appointment, Professional
+
+    from django_ec_calendar.source import NO_RESOURCE
+
+    ana = Professional.objects.create(name="Ana")
+
+    class Appointments(EventFeedView):
+        model = Appointment
+        calendar_start_field = "start"
+        calendar_duration_field = "minutes"
+        calendar_resource_field = "professional"
+
+    view = Appointments.as_view()
+    request = RequestFactory().get("/", {"resources": "1"})
+    response = view(request)
+    assert json.loads(response.content) == [
+        {"id": str(ana.pk), "title": "Ana"},
+        {"id": NO_RESOURCE, "title": "No professional"},
+    ]
+
+
+def test_the_tags_resources_and_options():
+    template = Template(
+        "{% load ec_calendar %}"
+        '{% ec_calendar "/events/?room=1" id="r" resources=True url_state=False'
+        " highlight_today=False %}"
+    )
+    html = template.render(Context({"request": RequestFactory().get("/")}))
+    data = json.loads(
+        re.search(
+            r'<script id="r-config" type="application/json">(.*?)</script>', html
+        ).group(1)
+    )
+    assert data["resources"] == {"url": "/events/?room=1&resources=1"}
+    assert (data["urlState"], data["highlightToday"]) == (False, False)
+    assert data["returnParam"] is None

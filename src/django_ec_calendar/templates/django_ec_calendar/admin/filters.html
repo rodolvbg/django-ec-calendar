@@ -1,0 +1,13 @@
+{% load admin_list i18n %}
+{# The changelist's filters, as Django's admin shows them. #}
+{% if cl.has_filters %}
+  <nav id="changelist-filter" aria-labelledby="changelist-filter-header">
+    <h2 id="changelist-filter-header">{% translate "Filter" %}</h2>
+    {% if cl.has_active_filters %}
+      <div id="changelist-filter-extra-actions">
+        <h3><a href="{{ cl.clear_all_filters_qs }}">&#10006; {% translate "Clear all filters" %}</a></h3>
+      </div>
+    {% endif %}
+    {% for spec in cl.filter_specs %}{% admin_list_filter cl spec %}{% endfor %}
+  </nav>
+{% endif %}

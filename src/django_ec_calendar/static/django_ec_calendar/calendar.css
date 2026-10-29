@@ -38,12 +38,46 @@
     }
 }
 
-/* Its titles are headings: not the page's (the admin's h4). */
+/* Its titles are headings: not the page's (the admin's h2 and h4, in a
+   .module too). */
 .django-ec-calendar .ec-event-title {
     margin: 0;
+    padding: 0;
+    background: none;
     color: inherit;
     font: inherit;
+    letter-spacing: normal;
+    text-align: start;
     text-transform: none;
+}
+
+.django-ec-calendar .ec-title {
+    margin: 0;
+    padding: 0;
+    background: none;
+    color: inherit;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+/* Today, tinted where it tells it apart: not in a day's view (where every
+   column is that day), nor with `highlight_today` off. */
+.django-ec-calendar[data-view$="Day"] .ec,
+.django-ec-calendar.django-ec-calendar--no-today .ec {
+    --ec-today-bg-color: transparent;
+}
+
+/* An event's details (calendar_detail_fields), a line each, under its
+   title. */
+.django-ec-calendar .django-ec-calendar-detail {
+    display: block;
+    overflow: hidden;
+    font-size: 0.85em;
+    opacity: 0.85;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* What can't be saved, and why: over the calendar. */

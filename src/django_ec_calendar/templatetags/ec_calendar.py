@@ -35,17 +35,28 @@ def ec_calendar(
     view: str = "dayGridMonth",
     views: str = "dayGridMonth timeGridWeek timeGridDay listMonth",
     id: str = "",  # noqa: A002 - the element's.
+    resources: bool = False,
+    url_state: bool = True,
+    highlight_today: bool = True,
     **options: Any,
 ) -> SafeString:
     """A calendar of the events at ``events`` (an ``EventFeedView``'s URL):
     opening on ``view``, switching between ``views`` (separated by spaces;
     empty: none), and any other of EventCalendar's options as keywords
-    (``firstDay=1``, ``slotMinTime="08:00"``)."""
+    (``firstDay=1``, ``slotMinTime="08:00"``).
+
+    ``resources``: its resources too, from the same view (``?resources=1``),
+    for the resource views. ``url_state``: its view and date in the page's
+    URL. ``highlight_today``: today tinted (never in a day's view)."""
+    separator = "&" if "?" in events else "?"
     config = calendar_config(
         context["request"],
         events=events,
         view=view,
         views=views.split(),
+        resources={"url": f"{events}{separator}resources=1"} if resources else None,
+        url_state=url_state,
+        highlight_today=highlight_today,
         options=options,
     )
     element = id or f"ec-calendar-{next(_ids)}"

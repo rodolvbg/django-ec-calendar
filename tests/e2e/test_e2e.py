@@ -8,7 +8,7 @@ import datetime
 import re
 
 import pytest
-from agenda.models import Booking, Holiday, Room
+from agenda.models import Appointment, Booking, Holiday, Professional, Room
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.utils import timezone
@@ -34,6 +34,25 @@ class _AdminE2ETestCase(StaticLiveServerTestCase):
     @pytest.fixture(autouse=True)
     def _inject_page(self, page: Page) -> None:
         self.page = page
+        # A move asks first: yes (a test that says no says so).
+        self.dialogs: list[str] = []
+        self.answer = True
+        page.on("dialog", self._answer)
+
+    def _answer(self, dialog) -> None:
+        self.dialogs.append(dialog.message)
+        if self.answer:
+            dialog.accept()
+        else:
+            dialog.dismiss()
+
+    def editable(self, model) -> None:
+        """Its calendar's moves on, for this test."""
+        from django.contrib import admin
+
+        model_admin = admin.site._registry[model]
+        model_admin.calendar_editable = True
+        self.addCleanup(delattr, model_admin, "calendar_editable")
 
     def tearDown(self) -> None:
         # Close the page before the test database is flushed (after
@@ -91,8 +110,9 @@ class TestBookings(_AdminE2ETestCase):
         event = self.page.locator(".ec-event", has_text="Client call")
         expect(event).to_contain_text("10:00")
         event.click()
+        # With the calendar's URL, to come back to it.
         expect(self.page).to_have_url(
-            f"{self.live_server_url}/admin/agenda/booking/{call.pk}/change/"
+            re.compile(rf"/admin/agenda/booking/{call.pk}/change/\?_ec_calendar=")
         )
 
     def slot(self, label: str) -> dict[str, float]:
@@ -227,7 +247,7 @@ class TestBookings(_AdminE2ETestCase):
         )
         page.locator(".ec-event", has_text="Client call").click()
         expect(page).to_have_title(f"Open {call.pk}")
-        assert page.url.endswith("/calendar/")
+        assert "/calendar/?" in page.url  # Still on it.
 
     def test_in_another_time_zone_the_same_times(self):
         self.book("Client call", 1, 10, 12)
@@ -282,6 +302,7 @@ class TestHolidays(_AdminE2ETestCase):
         holiday = Holiday.objects.create(
             name="Retreat", first_day=first, last_day=first + datetime.timedelta(days=1)
         )
+        self.editable(Holiday)
         self.login()
         self.open_calendar("holiday", "dayGridMonth")
         page = self.page
@@ -300,6 +321,106 @@ class TestHolidays(_AdminE2ETestCase):
         holiday.refresh_from_db()
         assert holiday.first_day == first + datetime.timedelta(days=1)
         assert holiday.last_day == first + datetime.timedelta(days=2)
+
+
+class TestAppointments(_AdminE2ETestCase):
+    """A column per professional (resourceTimeGridDay), today."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.ana = Professional.objects.create(name="Ana")
+        self.luis = Professional.objects.create(name="Luis")
+        start = timezone.make_aware(
+            datetime.datetime.combine(timezone.localdate(), datetime.time(9))
+        )
+        self.maria = Appointment.objects.create(
+            client="María",
+            professional=self.ana,
+            start=start,
+            minutes=60,
+            status="confirmed",
+        )
+
+    def open(self) -> None:
+        self.login()
+        self.page.goto(f"{self.live_server_url}/admin/agenda/appointment/calendar/")
+        expect(self.page.locator(".ec-event", has_text="María")).to_be_visible()
+
+    def column(self, name: str) -> dict[str, float]:
+        box = self.page.locator(
+            ".ec-header .ec-col-head", has_text=name
+        ).first.bounding_box()
+        assert box is not None
+        return box
+
+    def drag_to(self, name: str) -> None:
+        page = self.page
+        box = page.locator(".ec-event", has_text="María").bounding_box()
+        assert box is not None
+        column = self.column(name)
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 5)
+        page.mouse.down()
+        page.mouse.move(column["x"] + column["width"] / 2, box["y"] + 5, steps=15)
+        page.mouse.up()
+
+    def test_its_details_and_no_tint_in_a_day(self):
+        self.open()
+        expect(self.page.locator(".ec-event", has_text="María")).to_contain_text(
+            "Confirmed"
+        )
+        tint = self.page.locator(".ec").evaluate(
+            "e => getComputedStyle(e).getPropertyValue('--ec-today-bg-color').trim()"
+        )
+        assert tint == "transparent"
+
+    def test_dragged_to_another_professional(self):
+        self.open()
+        self.drag_to("Luis")
+        expect(self.page.locator(".django-ec-calendar-status")).to_be_hidden()
+        self.page.wait_for_timeout(400)
+        assert self.dialogs == ["Save the new dates of “María”?"]
+        self.maria.refresh_from_db()
+        assert self.maria.professional == self.luis
+        event = self.page.locator(".ec-event", has_text="María").bounding_box()
+        luis = self.column("Luis")
+        assert event and luis["x"] <= event["x"] < luis["x"] + luis["width"]
+
+    def test_a_move_one_says_no_to_goes_back(self):
+        self.answer = False
+        self.open()
+        self.drag_to("Luis")
+        self.page.wait_for_timeout(400)
+        assert len(self.dialogs) == 1
+        self.maria.refresh_from_db()
+        assert self.maria.professional == self.ana
+        event = self.page.locator(".ec-event", has_text="María").bounding_box()
+        ana = self.column("Ana")
+        assert event and ana["x"] <= event["x"] < ana["x"] + ana["width"]
+
+    def test_back_where_it_was_after_a_save(self):
+        self.open()
+        page = self.page
+        page.locator(".ec-toolbar button", has_text="List").click()
+        expect(page).to_have_url(re.compile(r"ec-view=listWeek"))
+        page.locator(".ec-event", has_text="María").click()
+        expect(page).to_have_url(re.compile(r"/change/\?_ec_calendar="))
+        page.locator("input[name=_save]").click()
+        expect(page).to_have_url(
+            re.compile(r"/appointment/calendar/\?.*ec-view=listWeek")
+        )
+        expect(page.locator(".ec-list")).to_be_visible()
+
+    def test_its_filters_keep_its_place(self):
+        self.open()
+        page = self.page
+        page.locator(".ec-toolbar button", has_text="Week").click()
+        expect(page).to_have_url(re.compile(r"ec-view=resourceTimeGridWeek"))
+        page.locator("#changelist-filter a", has_text="Luis").click()
+        expect(page).to_have_url(re.compile(r"professional__id__exact="))
+        assert "ec-view=resourceTimeGridWeek" in page.url
+        header = page.locator(".ec-header").first
+        expect(header).to_contain_text("Luis")
+        assert "Ana" not in header.inner_text()
 
 
 class TestPage(_AdminE2ETestCase):

@@ -4,6 +4,11 @@ import tempfile
 from pathlib import Path
 
 from example.settings import *  # noqa: F403
+from example.settings import INSTALLED_APPS
+
+# The tests' own models and admin site (resources of every kind).
+INSTALLED_APPS = [*INSTALLED_APPS, "tests.calapp"]
+ROOT_URLCONF = "tests.urls"
 
 # A file, not in memory: the end-to-end tests' server answers from several
 # threads, and an in-memory database is one connection they'd all share

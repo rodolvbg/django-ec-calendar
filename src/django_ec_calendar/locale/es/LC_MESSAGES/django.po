@@ -80,3 +80,67 @@ msgstr "No se guardó"
 #: templates/django_ec_calendar/admin/change_list.html
 msgid "Calendar"
 msgstr "Calendario"
+
+#: config.py
+msgid "Year"
+msgstr "Año"
+
+#: config.py
+msgid "Expand"
+msgstr "Desplegar"
+
+#: config.py
+msgid "Collapse"
+msgstr "Plegar"
+
+#: config.py
+msgid "Previous day"
+msgstr "Día anterior"
+
+#: config.py
+msgid "Next day"
+msgstr "Día siguiente"
+
+#: config.py
+msgid "Previous week"
+msgstr "Semana anterior"
+
+#: config.py
+msgid "Next week"
+msgstr "Semana siguiente"
+
+#: config.py
+msgid "Previous month"
+msgstr "Mes anterior"
+
+#: config.py
+msgid "Next month"
+msgstr "Mes siguiente"
+
+#: config.py
+msgid "Previous year"
+msgstr "Año anterior"
+
+#: config.py
+msgid "Next year"
+msgstr "Año siguiente"
+
+#: config.py
+#, python-format
+msgid "Save the new dates of “%(title)s”?"
+msgstr "¿Guardar las nuevas fechas de «%(title)s»?"
+
+#: source.py
+#, python-format
+msgid "No %(name)s"
+msgstr "Sin %(name)s"
+
+#: admin.py
+#, python-format
+msgid "Unknown %(name)s."
+msgstr "Valor de %(name)s no válido."
+
+#: admin.py
+#, python-format
+msgid "It can't be moved to another %(name)s."
+msgstr "No se puede cambiar de %(name)s."

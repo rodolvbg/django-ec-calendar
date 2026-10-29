@@ -25,8 +25,11 @@ class EventFeedView(CalendarSource, MultipleObjectMixin, View):
             calendar_end_field = "end"
 
     Each event leads to ``get_calendar_event_url()`` (by default its
-    ``get_absolute_url()``, when it has one). Who may see them is the
-    view's: ``LoginRequiredMixin``, ``get_queryset()``…
+    ``get_absolute_url()``, when it has one). With
+    ``calendar_resource_field``, ``?resources=1`` answers its resources
+    (``get_calendar_resources()``): ``{% ec_calendar … resources=True %}``
+    asks for them. Who may see them is the view's: ``LoginRequiredMixin``,
+    ``get_queryset()``…
     """
 
     def get_source_model(self) -> type[Model]:
@@ -45,6 +48,8 @@ class EventFeedView(CalendarSource, MultipleObjectMixin, View):
         return event
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        if self.calendar_resource_field and request.GET.get("resources"):
+            return JsonResponse(self.get_calendar_resources(request), safe=False)
         return JsonResponse(
             self.get_calendar_events(request, self.get_queryset()), safe=False
         )

@@ -21,6 +21,13 @@
  * and after a move, `django-ec-calendar:event-change` ({event, saved,
  * error}).
  *
+ * With resources (`config.resources`), dropping an event in another one
+ * changes it too (`config.resource.editable`), and adding sends it. With
+ * `config.urlState`, the view and its date are in the page's URL (`ec-view`,
+ * `ec-date`), read when it opens: back from an event's page, the same
+ * place. With `config.returnParam`, the pages it opens get its URL, to come
+ * back to it after a save. A move asks first, with `config.confirmMove`.
+ *
  * It follows the page's theme, light or dark (Django's admin, Unfold, a
  * "dark" class), else the system's. `window.djangoEcCalendar.setup()`
  * makes those added later.
@@ -134,11 +141,37 @@
         }
     }
 
+    function node(tag, className, text) {
+        const made = document.createElement(tag);
+        made.className = className;
+        made.textContent = text;
+        return made;
+    }
+
+    /** The view and date of the page's URL (`ec-view`, `ec-date`), if
+     * they're the calendar's. */
+    function readState(options) {
+        const query = new URLSearchParams(window.location.search);
+        const view = query.get("ec-view");
+        const date = query.get("ec-date") ?? "";
+        return {
+            view: [options.view, ...options.views].includes(view)
+                ? view
+                : undefined,
+            date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined,
+        };
+    }
+
     function create(element, options) {
         const texts = options.texts;
+        const resource = options.resource;
         const status = element.querySelector(".django-ec-calendar-status");
         const target = document.createElement("div");
         element.append(target);
+        element.classList.toggle(
+            "django-ec-calendar--no-today",
+            options.highlightToday === false,
+        );
 
         function say(text) {
             if (!status) return;
@@ -157,21 +190,68 @@
             );
         }
 
-        function add(start, end, allDay) {
+        /** `url`, taking the calendar's (where it is now) to come back. */
+        function returning(url) {
+            if (!options.returnParam) return url;
+            const next = new URL(url, window.location.href);
+            next.searchParams.set(
+                options.returnParam,
+                window.location.pathname + window.location.search,
+            );
+            return next.origin === window.location.origin
+                ? next.pathname + next.search + next.hash
+                : url;
+        }
+
+        /** A resource's id, for the server; null: none. */
+        const resourceId = (item) =>
+            item && item.id !== resource?.empty ? String(item.id) : null;
+
+        function add(start, end, allDay, where) {
             const dates = allDay || options.datesOnly;
             const query = new URLSearchParams({ start: moment(start, dates) });
             if (end) query.set("end", moment(end, dates));
-            api.go(`${options.add}?${query}`);
+            const id = resource ? resourceId(where) : null;
+            if (id !== null) query.set(resource.param, id);
+            api.go(returning(`${options.add}?${query}`));
+        }
+
+        function failed(info, error) {
+            info.revert();
+            say(error);
+            announce(
+                "event-change",
+                { event: info.event, saved: false, error },
+                false,
+            );
         }
 
         async function save(info) {
             const { event } = info;
+            const elsewhere = info.newResource !== undefined;
+            if (elsewhere && !resource?.editable) {
+                failed(info, resource?.message ?? texts.failed);
+                return;
+            }
+            if (
+                options.confirmMove &&
+                !window.confirm(
+                    texts.confirmMove.replace("%(title)s", event.title),
+                )
+            ) {
+                failed(info, "");
+                return;
+            }
             const dates = event.allDay || options.datesOnly;
             const body = new URLSearchParams({
                 pk: event.id,
                 start: moment(event.start, dates),
                 end: event.end ? moment(event.end, dates) : "",
             });
+            if (elsewhere) {
+                body.set("resource", String(info.newResource.id));
+                body.set("resource_from", String(info.oldResource?.id ?? ""));
+            }
             say(texts.saving);
             try {
                 const response = await fetch(options.move, {
@@ -194,20 +274,34 @@
                     false,
                 );
             } catch (error) {
-                info.revert();
-                say(error.message || texts.failed);
-                announce(
-                    "event-change",
-                    {
-                        event,
-                        saved: false,
-                        error: error.message || texts.failed,
-                    },
-                    false,
-                );
+                failed(info, error.message || texts.failed);
             }
         }
 
+        /** Its title, and its details under it (as text); without any, as
+         * EventCalendar shows it. */
+        function content(info) {
+            const details = info.event.extendedProps?.details ?? [];
+            if (!details.length) return undefined;
+            const listed = info.view.type.startsWith("list");
+            const nodes = [];
+            if (!listed && info.timeText) {
+                nodes.push(node("time", "ec-event-time", info.timeText));
+            }
+            nodes.push(node("h4", "ec-event-title", info.event.title));
+            for (const { label, value } of details) {
+                const line = node(
+                    "span",
+                    "django-ec-calendar-detail",
+                    listed ? `${label}: ${value}` : value,
+                );
+                line.title = label;
+                nodes.push(line);
+            }
+            return { domNodes: nodes };
+        }
+
+        const state = options.urlState ? readState(options) : {};
         const views = options.views.length ? options.views : [];
         const calendar = window.EventCalendar.create(target, {
             view: options.view,
@@ -216,7 +310,14 @@
                 center: "title",
                 end: views.join(","),
             },
-            buttonText: (defaults) => ({ ...defaults, ...texts }),
+            buttonText(defaults) {
+                const text = { ...defaults, ...texts.buttons };
+                // Its views' "prev" and "next" ("Previous week"…).
+                for (const key of ["prev", "next"]) {
+                    text[key] = texts.labels[defaults[key]] ?? defaults[key];
+                }
+                return text;
+            },
             locale: options.locale,
             firstDay: options.firstDay,
             timeZone: options.timeZone,
@@ -224,10 +325,23 @@
             eventSources: [
                 { url: options.events, extraParams: options.params },
             ],
+            ...(options.resources ? { resources: options.resources } : {}),
             allDayContent: texts.allDay,
             noEventsContent: texts.noEvents,
             moreLinkContent: (arg) =>
                 texts.more.replace("%(count)s", String(arg.num)),
+            eventContent: content,
+            datesSet(info) {
+                element.dataset.view = info.view.type;
+                if (!options.urlState) return;
+                const url = new URL(window.location.href);
+                url.searchParams.set("ec-view", info.view.type);
+                url.searchParams.set(
+                    "ec-date",
+                    moment(info.view.currentStart, true),
+                );
+                window.history.replaceState(window.history.state, "", url);
+            },
             eventClick(info) {
                 const url = info.event.extendedProps?.url ?? null;
                 const detail = {
@@ -235,7 +349,9 @@
                     url,
                     jsEvent: info.jsEvent,
                 };
-                if (announce("event-click", detail) && url) api.go(url);
+                if (announce("event-click", detail) && url) {
+                    api.go(returning(url));
+                }
             },
             selectable: Boolean(options.add),
             select(info) {
@@ -244,10 +360,11 @@
                     start: moment(info.start, dates),
                     end: moment(info.end, dates),
                     allDay: info.allDay,
+                    resource: resourceId(info.resource),
                     jsEvent: info.jsEvent,
                 };
                 if (announce("select", detail) && options.add) {
-                    add(info.start, info.end, info.allDay);
+                    add(info.start, info.end, info.allDay, info.resource);
                 }
             },
             dateClick(info) {
@@ -255,10 +372,11 @@
                 const detail = {
                     start: moment(info.date, dates),
                     allDay: info.allDay,
+                    resource: resourceId(info.resource),
                     jsEvent: info.jsEvent,
                 };
                 if (announce("date-click", detail) && options.add) {
-                    add(info.date, null, info.allDay);
+                    add(info.date, null, info.allDay, info.resource);
                 }
             },
             // Each event says whether it may be dragged (its `editable`).
@@ -266,10 +384,61 @@
             eventDrop: options.move ? save : undefined,
             eventResize: options.move ? save : undefined,
             ...options.options,
+            // Where it was (the page's URL), over where it opens.
+            ...(state.view ? { view: state.view } : {}),
+            ...(state.date ? { date: state.date } : {}),
         });
         follow(element);
         return calendar;
     }
+
+    /** Links and forms that change a calendar's page (its filters, its
+     * search) keep its view and date. */
+    function keepState(url) {
+        const here = new URLSearchParams(window.location.search);
+        for (const name of ["ec-view", "ec-date"]) {
+            if (here.has(name) && !url.searchParams.has(name)) {
+                url.searchParams.set(name, here.get(name));
+            }
+        }
+    }
+
+    const KEEP = "[data-django-ec-calendar-keep-state]";
+
+    document.addEventListener(
+        "click",
+        (event) => {
+            const link = event.target.closest?.(`${KEEP} a[href]`);
+            if (!link) return;
+            const url = new URL(link.href, window.location.href);
+            if (url.pathname !== window.location.pathname) return;
+            keepState(url);
+            link.href = url.href;
+        },
+        true,
+    );
+
+    document.addEventListener(
+        "submit",
+        (event) => {
+            const form = event.target;
+            if (!form.closest?.(KEEP) || form.method.toLowerCase() !== "get") {
+                return;
+            }
+            const url = new URL(window.location.href);
+            url.search = "";
+            keepState(url);
+            for (const [name, value] of url.searchParams) {
+                if (form.querySelector(`[name="${name}"]`)) continue;
+                const input = document.createElement("input");
+                input.type = "hidden";
+                input.name = name;
+                input.value = value;
+                form.append(input);
+            }
+        },
+        true,
+    );
 
     function setup(root = document) {
         const made = [];
