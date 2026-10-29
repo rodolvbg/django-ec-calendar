@@ -224,6 +224,7 @@ Each option has a method that takes the request, as the admin's
 |---|---|
 | `get_calendar_queryset(request)` | The changelist's objects. |
 | `get_calendar_view(request)`, `get_calendar_views(request)` | `calendar_view`, `calendar_views`. |
+| `get_calendar_options(request)` | `calendar_options`: any other of EventCalendar's options, over those fitted to the hours. Only what's shown: what the server allows has its own methods. |
 | `get_calendar_detail_fields(request)` | `calendar_detail_fields`. |
 | `get_calendar_business_hours(request, resource=None)`, `get_calendar_closed(request, start, end, resource=None)` | `calendar_business_hours`; none. |
 | `get_calendar_resources(request)`, `get_calendar_resource_empty_label(request)` | Its field's; "No …". |
@@ -239,9 +240,8 @@ def has_calendar_move_permission(self, request, obj=None):
     return allowed and (obj is None or obj.professional.user == request.user)
 ```
 
-The browser and the server ask the same methods. Any other of
-EventCalendar's options, for a request: `get_calendar_config(request)`
-(calling `super()`, its `"options"`).
+The browser and the server ask the same methods. The whole configuration
+the script reads is `get_calendar_config(request)`.
 
 The fields (`calendar_start_field`, `calendar_end_field`,
 `calendar_duration_field`, `calendar_resource_field`…) are the model's,

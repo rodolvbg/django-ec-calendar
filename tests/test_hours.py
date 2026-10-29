@@ -332,6 +332,9 @@ class TestEachRequest:
         )
         monkeypatch.setattr(model_admin, "get_calendar_confirm_move", lambda r: False)
         monkeypatch.setattr(model_admin, "get_calendar_filters", lambda r: False)
+        monkeypatch.setattr(
+            model_admin, "get_calendar_options", lambda r: {"slotMinTime": "06:00"}
+        )
         html = admin_client.get(f"{APPOINTMENTS}calendar/").content.decode()
         data = config(html)
         assert (data["view"], data["views"]) == ("listWeek", ["listWeek"])
@@ -341,6 +344,9 @@ class TestEachRequest:
             False,
         )
         assert 'id="changelist-filter"' not in html
+        # Its own, over those fitted to the hours.
+        assert data["options"]["slotMinTime"] == "06:00"
+        assert data["options"]["slotMaxTime"] == "20:00:00"
         Appointment.objects.create(client="María", start=at(9), minutes=30)
         [event] = [
             e

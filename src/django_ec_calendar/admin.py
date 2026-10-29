@@ -153,6 +153,12 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
         """Whether today is tinted (``calendar_highlight_today``)."""
         return self.calendar_highlight_today
 
+    def get_calendar_options(self, request: HttpRequest) -> dict[str, Any]:
+        """Any other of EventCalendar's options (``calendar_options``): what
+        the calendar shows, not what the server allows (that has its own
+        methods). Over those fitted to the business hours."""
+        return dict(self.calendar_options)
+
     def has_calendar_move_permission(
         self, request: HttpRequest, obj: Model | None = None
     ) -> bool:
@@ -413,7 +419,7 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
             # Fitted to the business hours, unless its own options say.
             options={
                 **self.get_calendar_hours_options(request),
-                **self.calendar_options,
+                **self.get_calendar_options(request),
             },
         )
 

@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to be selected, clicked nor moved to (checked by the server for moves;
   `is_calendar_open()`).
 - A method for each option, taking the request: `get_calendar_view()`,
-  `get_calendar_views()`, `get_calendar_detail_fields()`,
+  `get_calendar_views()`, `get_calendar_options()`, `get_calendar_detail_fields()`,
   `get_calendar_confirm_move()`, `get_calendar_resource_editable()`,
   `get_calendar_filters()`, `get_calendar_url_state()`,
   `get_calendar_highlight_today()`; and `has_calendar_move_permission(request,
