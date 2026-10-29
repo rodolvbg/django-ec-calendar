@@ -1349,3 +1349,79 @@ describe("a move saved, as the server says", () => {
         expect(created.at(-1).updateEvent).toHaveBeenCalledWith(SERVER);
     });
 });
+
+describe("its date picker", () => {
+    const picker = () => element().querySelector(".django-ec-calendar-date");
+
+    it("in its toolbar, to go to a date, following the one shown", async () => {
+        page({
+            ...CONFIG,
+            datePicker: true,
+            texts: { ...TEXTS, goToDate: "Go to a date" },
+        });
+        await load();
+        const calendar = created.at(-1);
+        calendar.setOption = vi.fn();
+        const o = options();
+        expect(o.headerToolbar.start).toBe("prev,next today datePicker");
+        const [input] = o.customButtons.datePicker.content.domNodes;
+        expect(input.type).toBe("date");
+        expect(input.getAttribute("aria-label")).toBe("Go to a date");
+        o.datesSet({
+            view: {
+                type: "timeGridWeek",
+                currentStart: new Date("2026-11-09T00:00:00"),
+            },
+        });
+        expect(input.value).toBe("2026-11-09");
+        input.value = "2026-12-24";
+        input.dispatchEvent(new Event("change"));
+        expect(calendar.setOption).toHaveBeenCalledWith("date", "2026-12-24");
+        input.value = "";
+        input.dispatchEvent(new Event("change"));
+        expect(calendar.setOption).toHaveBeenCalledOnce();
+        expect(picker()).toBe(null); // EventCalendar puts it in its toolbar.
+    });
+
+    it("within its valid range, and with the page's own buttons", async () => {
+        const mine = { text: "Mine" }; // (As JSON: no functions.)
+        page({
+            ...CONFIG,
+            datePicker: true,
+            options: {
+                validRange: { start: "2026-01-01", end: "2026-12-31T00:00:00" },
+                customButtons: { mine },
+            },
+        });
+        await load();
+        const { datePicker, mine: kept } = options().customButtons;
+        const [input] = datePicker.content.domNodes;
+        expect([input.min, input.max]).toEqual(["2026-01-01", "2026-12-31"]);
+        expect(kept).toEqual(mine);
+        expect(input.getAttribute("aria-label")).toBe(""); // No text for it.
+    });
+
+    it("off: not in its toolbar", async () => {
+        page({ ...CONFIG, datePicker: false });
+        await load();
+        expect(options().headerToolbar.start).toBe("prev,next today");
+    });
+});
+
+describe("an add page with a query of its own", () => {
+    it("gets the dates too", async () => {
+        page({
+            ...CONFIG,
+            add: "/admin/agenda/appointment/add/?professional=3",
+        });
+        const api = await load();
+        api.go = vi.fn();
+        options().dateClick({
+            date: new Date("2026-10-28T10:00:00"),
+            allDay: false,
+        });
+        expect(api.go).toHaveBeenCalledWith(
+            "/admin/agenda/appointment/add/?professional=3&start=2026-10-28T10%3A00%3A00",
+        );
+    });
+});

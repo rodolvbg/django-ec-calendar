@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `CalendarInline`: an object's calendar in its change page (the
+  calendar of another model's objects related to it, its admin's), adding
+  with the object filled in, and back to its page after a save.
+- A date picker in the toolbar (`calendar_date_picker`, on by default;
+  `date_picker` in the template tag), to go to a date.
+
 - `CalendarView`: a calendar on your own pages with all the admin's does —
   moving (`"save"`, `"confirm"`, `"batch"`), adding with the dates,
   resources, business hours — by the user's model permissions (each
@@ -23,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- After a save from the calendar, back to any of the admin's pages it was
+  opened from (an inline's object's page too), not only the calendar's.
 - `CalendarAdminMixin` is `CalendarMixin` with the admin's permissions,
   changelist, saves and log: the same options and methods as before.
 - A detail `get_<field>_display` is labelled by its field.

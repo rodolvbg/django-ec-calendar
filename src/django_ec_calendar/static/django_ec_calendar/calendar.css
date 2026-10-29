@@ -130,3 +130,26 @@
     outline: 2px dashed currentColor;
     outline-offset: -2px;
 }
+
+/* Its date field (calendar_date_picker), as its toolbar's buttons. */
+.django-ec-calendar .django-ec-calendar-date {
+    box-sizing: border-box;
+    height: 2.5em;
+    margin: 0;
+    padding: 0 0.5em;
+    border: 1px solid var(--ec-button-border-color);
+    border-radius: 0.25rem;
+    background: var(--ec-button-bg-color);
+    color: var(--ec-button-text-color);
+    font: inherit;
+}
+
+.django-ec-calendar.ec-dark .django-ec-calendar-date {
+    color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+    .django-ec-calendar.ec-auto-dark .django-ec-calendar-date {
+        color-scheme: dark;
+    }
+}

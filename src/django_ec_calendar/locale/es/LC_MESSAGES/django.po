@@ -168,3 +168,11 @@ msgstr "No puedes moverlo."
 #: admin.py
 msgid "Not a list of moves."
 msgstr "No es una lista de movimientos."
+
+#: config.py
+msgid "Go to a date"
+msgstr "Ir a una fecha"
+
+#: templates/django_ec_calendar/admin/inline.html
+msgid "Save it first to see its calendar."
+msgstr "Guárdalo primero para ver su calendario."

@@ -80,6 +80,7 @@ def calendar_texts() -> dict[str, Any]:
         "noEvents": gettext("No events"),
         # %(count)s: how many more there are that day.
         "more": gettext("+%(count)s more"),
+        "goToDate": gettext("Go to a date"),
         "saving": gettext("Saving…"),
         "save": gettext("Save"),
         "discard": gettext("Discard"),
@@ -134,6 +135,7 @@ def calendar_config(
     resource: Mapping[str, Any] | None = None,
     url_state: bool = True,
     highlight_today: bool = True,
+    date_picker: bool = False,
     outside_hours: str = "shade",
     return_param: str | None = None,
     options: Mapping[str, Any] | None = None,
@@ -149,6 +151,7 @@ def calendar_config(
     whether the view and its date go in the page's URL (``ec-view``,
     ``ec-date``), and are read from it.
     ``highlight_today``: whether today is tinted (never in a day's view).
+    ``date_picker``: whether its toolbar has a date field, to go to one.
     ``move_mode``: how a drag goes (``"off"``, ``"save"``, ``"confirm"``,
     ``"batch"``: kept, and saved together at ``moves``). ``outside_hours``: out of the
     business hours (its background events), ``"shade"`` or ``"block"`` (not
@@ -170,6 +173,7 @@ def calendar_config(
         "resource": dict(resource) if resource else None,
         "urlState": url_state,
         "highlightToday": highlight_today,
+        "datePicker": date_picker,
         "moves": moves,
         "moveMode": move_mode,
         "outsideHours": outside_hours,

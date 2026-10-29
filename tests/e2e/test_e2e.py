@@ -603,6 +603,33 @@ class TestProfessionalAgenda(_AdminE2ETestCase):
         assert maria.start == start + datetime.timedelta(hours=1)
 
 
+class TestInline(TestAppointments):
+    """A professional's appointments, in their page (CalendarInline)."""
+
+    def test_in_their_page_and_to_another_date(self):
+        self.login()
+        page = self.page
+        page.goto(
+            f"{self.live_server_url}/admin/agenda/professional/{self.ana.pk}/change/"
+        )
+        inline = page.locator(".django-ec-calendar-inline")
+        expect(inline.locator(".ec-event", has_text="María")).to_be_visible()
+        picker = inline.locator(".django-ec-calendar-date")
+        week_later = timezone.localdate() + datetime.timedelta(days=7)
+        picker.fill(week_later.isoformat())
+        picker.dispatch_event("change")
+        expect(inline.locator(".ec-event", has_text="María")).to_have_count(0)
+        # Its object's page still saves, with it.
+        page.locator("[name=_save]").first.click()
+        expect(page).to_have_url(re.compile(r"/admin/agenda/professional/$"))
+
+    test_its_details_and_no_tint_in_a_day = None
+    test_a_move_one_says_no_to_goes_back = None
+    test_back_where_it_was_after_a_save = None
+    test_its_filters_keep_its_place = None
+    test_dragged_to_another_professional = None
+
+
 class TestPage(_AdminE2ETestCase):
     def test_a_calendar_on_a_page(self):
         call = self.book("Client call", 1, 10, 12)

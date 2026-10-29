@@ -4,7 +4,7 @@ from django.contrib import admin
 from unfold.admin import ModelAdmin
 from unfold.sites import UnfoldAdminSite
 
-from django_ec_calendar import CalendarAdminMixin
+from django_ec_calendar import CalendarAdminMixin, CalendarInline
 from django_ec_calendar.source import ONE_DAY
 
 from .models import Appointment, Booking, Holiday, Professional, Room
@@ -45,9 +45,19 @@ class HolidayAdmin(CalendarAdminMixin, ModelAdmin):
     calendar_views = ("dayGridMonth", "listYear")
 
 
+class AppointmentCalendarInline(CalendarInline):
+    """A professional's appointments, in their page: the appointments'
+    calendar (its hours, moves…), of theirs."""
+
+    model = Appointment
+    calendar_view = "timeGridWeek"
+    calendar_views = ("timeGridWeek", "timeGridDay", "listWeek")
+
+
 @admin.register(Professional, site=site)
 class ProfessionalAdmin(ModelAdmin):
     list_display = ("name", "active")
+    inlines = [AppointmentCalendarInline]
 
 
 @admin.register(Appointment, site=site)

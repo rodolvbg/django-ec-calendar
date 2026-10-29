@@ -86,6 +86,8 @@ class CalendarMixin(CalendarSource):
     calendar_url_state = True
     #: Whether today is tinted (never in a day's view).
     calendar_highlight_today = True
+    #: Whether its toolbar has a date field, to go to a date.
+    calendar_date_picker = True
     #: Any other of EventCalendar's options (JSON).
     calendar_options: dict[str, Any] = {}  # noqa: RUF012
     #: Errors of ``get_calendar_queryset()`` that are the request's (a filter
@@ -127,6 +129,10 @@ class CalendarMixin(CalendarSource):
     def get_calendar_highlight_today(self, request: HttpRequest) -> bool:
         """Whether today is tinted (``calendar_highlight_today``)."""
         return self.calendar_highlight_today
+
+    def get_calendar_date_picker(self, request: HttpRequest) -> bool:
+        """Whether its toolbar has a date field (``calendar_date_picker``)."""
+        return self.calendar_date_picker
 
     def get_calendar_options(self, request: HttpRequest) -> dict[str, Any]:
         """Any other of EventCalendar's options (``calendar_options``): what
@@ -259,6 +265,7 @@ class CalendarMixin(CalendarSource):
             resource=resource,
             url_state=self.get_calendar_url_state(request),
             highlight_today=self.get_calendar_highlight_today(request),
+            date_picker=self.get_calendar_date_picker(request),
             outside_hours=self.calendar_outside_hours,
             return_param=self.get_calendar_return_param(request),
             # Fitted to the business hours, unless its own options say.

@@ -78,8 +78,39 @@ The changelist gets a "Calendar" link, next to "Add":
   (`dayGridMonth`, `timeGridWeek`, `timeGridDay`, `listMonth`; any of
   [EventCalendar's](https://github.com/vkurko/calendar#view), the
   resources' and timelines' included, all translated).
+- **A date picker** in its toolbar goes to the date chosen
+  (`calendar_date_picker = False`: not; `date_picker=False` in the tag).
 - **Today** is tinted, but not in a day's view (`calendar_highlight_today =
   False`: never).
+
+### In an object's page
+
+`CalendarInline` is the calendar of another model's objects related to
+an object, in its change page — a professional's appointments in theirs:
+
+```python
+from django_ec_calendar import CalendarInline
+
+
+class AppointmentCalendarInline(CalendarInline):
+    model = Appointment  # its admin a CalendarAdminMixin
+    fk_name = "professional"  # if it has several foreign keys to it
+    calendar_view = "timeGridWeek"  # optional (its admin's)
+
+
+@admin.register(Professional)
+class ProfessionalAdmin(admin.ModelAdmin):
+    inlines = [AppointmentCalendarInline]
+```
+
+It's the model's admin's calendar — its permissions, business hours,
+moves, details — of the object's (filtered by the foreign key, as its
+changelist would be). Adding from it fills the object in; after a save,
+back to its page. It isn't a formset: the object's form saves as always,
+and nothing of the calendar goes with it. Before the object is saved, it
+says so.
+
+![A professional's page, with their appointments' week](docs/screenshots/calendar-inline.png)
 
 ### In the menu
 
@@ -268,6 +299,7 @@ Each option has a method that takes the request, as the admin's
 | `get_calendar_resources(request)`, `get_calendar_resource_empty_label(request)` | Its field's; "No …". |
 | `get_calendar_resource_editable(request)` | `calendar_resource_editable`. |
 | `get_calendar_move_mode(request)` | `calendar_move_mode`. |
+| `get_calendar_date_picker(request)` | `calendar_date_picker`. |
 | `get_calendar_filters(request)`, `get_calendar_url_state(request)`, `get_calendar_highlight_today(request)` | Their attributes. |
 | `has_calendar_move_permission(request, obj=None)` | Its move mode isn't `"off"`, and one may change it. |
 | `has_calendar_add_permission(request)` | `calendar_selectable`, and one may add. |

@@ -14,11 +14,12 @@ from django.contrib.admin.options import (
     IS_POPUP_VAR,
     BaseModelAdmin,
     IncorrectLookupParameters,
+    InlineModelAdmin,
 )
 from django.contrib.admin.utils import quote
-from django.core.exceptions import PermissionDenied
-from django.forms.models import modelform_factory
-from django.http import HttpResponseRedirect
+from django.core.exceptions import ImproperlyConfigured, PermissionDenied
+from django.forms.models import _get_foreign_key, modelform_factory
+from django.http import HttpResponseRedirect, QueryDict
 from django.template.loader import select_template
 from django.template.response import TemplateResponse
 from django.urls import NoReverseMatch, path, reverse
@@ -29,6 +30,7 @@ from django.views.decorators.http import require_POST
 from .config import calendar_media
 from .core import MOVE_MODES, CalendarMixin, CalendarMove, CalendarMoveError
 from .source import NO_RESOURCE
+from .widget import Calendar
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -43,6 +45,7 @@ __all__ = [
     "MOVE_MODES",
     "RETURN_PARAM",
     "CalendarAdminMixin",
+    "CalendarInline",
     "CalendarMove",
     "CalendarMoveError",
 ]
@@ -347,13 +350,17 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
     # Back to the calendar ----------------------------------------------------
 
     def _calendar_return(self, request: HttpRequest) -> HttpResponseRedirect | None:
-        """The calendar the page was opened from (``_ec_calendar``), to go
-        back to it; None: not from it (or not this calendar's URL)."""
+        """The calendar the page was opened from (``_ec_calendar``): its page,
+        or another of the admin's (an inline's, ``CalendarInline``), to go
+        back to it; None: not from it (or not an admin's page)."""
         url = request.GET.get(RETURN_PARAM, "")
-        calendar = self._reverse("calendar")
+        try:
+            admin = reverse(f"{self.admin_site.name}:index")
+        except NoReverseMatch:
+            admin = None
         if (
-            calendar
-            and url.startswith(calendar)
+            admin
+            and url.startswith(admin)
             and url_has_allowed_host_and_scheme(
                 url,
                 allowed_hosts={request.get_host()},
@@ -376,3 +383,106 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
         """Changed from the calendar: back to it."""
         back = self._calendar_return(request)
         return back or super().response_post_save_change(request, obj)  # type: ignore[misc]
+
+
+class CalendarInline(InlineModelAdmin):
+    """An object's calendar, in its change page: the calendar of another
+    model's objects related to it, as an inline::
+
+        class AppointmentCalendarInline(CalendarInline):
+            model = Appointment  # its admin a CalendarAdminMixin
+            fk_name = "professional"  # if it has several to the object
+
+
+        class ProfessionalAdmin(admin.ModelAdmin):
+            inlines = [AppointmentCalendarInline]
+
+    It's the model's admin's calendar (its permissions, business hours,
+    moves, details…) of those of the object (filtered by the foreign key, as
+    its changelist would be); adding from it, the object is filled in; after
+    a save, back to the object's page. It isn't a formset: it neither adds
+    nor changes anything with the object's form.
+    """
+
+    template = "django_ec_calendar/admin/inline.html"
+    extra = 0
+    max_num = 0
+    can_delete = False
+    #: The view it opens on, and those one can switch between (none: those
+    #: of the model's admin).
+    calendar_view: str | None = None
+    calendar_views: Sequence[str] | None = None
+
+    @property
+    def media(self) -> Any:
+        return super().media + calendar_media()
+
+    def get_calendar_admin(self) -> CalendarAdminMixin:
+        """The model's admin, whose calendar it is."""
+        model_admin = self.admin_site._registry.get(self.model)
+        if not isinstance(model_admin, CalendarAdminMixin) or not (
+            model_admin.uses_calendar
+        ):
+            raise ImproperlyConfigured(
+                f"{type(self).__name__}: {self.model.__name__}'s admin isn't a "
+                "CalendarAdminMixin with a calendar."
+            )
+        return model_admin
+
+    def get_calendar_foreign_key(self) -> Any:
+        return _get_foreign_key(self.parent_model, self.model, fk_name=self.fk_name)
+
+    # Not a formset: nothing of it in the object's form.
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Any]:
+        return super().get_queryset(request).none()
+
+    def get_formset(
+        self, request: HttpRequest, obj: Model | None = None, **kwargs: Any
+    ) -> Any:
+        kwargs["fields"] = []  # No form of its own.
+        return super().get_formset(request, obj, **kwargs)
+
+    def has_add_permission(  # type: ignore[override]
+        self, request: HttpRequest, obj: Model | None
+    ) -> bool:
+        return False
+
+    def has_change_permission(
+        self, request: HttpRequest, obj: Model | None = None
+    ) -> bool:
+        return False
+
+    def has_delete_permission(
+        self, request: HttpRequest, obj: Model | None = None
+    ) -> bool:
+        return False
+
+    def has_view_permission(
+        self, request: HttpRequest, obj: Model | None = None
+    ) -> bool:
+        """For those who may see the model's admin's calendar."""
+        return self.get_calendar_admin().has_calendar_view_permission(request)
+
+    def get_calendar(self, request: HttpRequest, obj: Model | None) -> Calendar | None:
+        """The calendar of ``obj``'s; None: it isn't saved yet."""
+        if obj is None or obj.pk is None:
+            return None
+        calendar_admin = self.get_calendar_admin()
+        fk = self.get_calendar_foreign_key()
+        value = str(getattr(obj, fk.target_field.attname))
+        # As its changelist filtered by the object.
+        scoped = copy.copy(request)
+        query = QueryDict(mutable=True)
+        query[f"{fk.name}__{fk.target_field.name}__exact"] = value
+        scoped.GET = query  # type: ignore[assignment]
+        config = calendar_admin.get_calendar_config(scoped)
+        if self.calendar_view:
+            config["view"] = self.calendar_view
+        if self.calendar_views is not None:
+            config["views"] = list(self.calendar_views)
+        if config["add"]:
+            config["add"] = f"{config['add']}?{fk.name}={value}"
+        # Not the object's page's URL: its own.
+        config["urlState"] = False
+        return Calendar(config, id=f"{self.model._meta.model_name}-calendar")

@@ -35,6 +35,7 @@ def ec_calendar(
     resources: bool = False,
     url_state: bool = True,
     highlight_today: bool = True,
+    date_picker: bool = True,
     **options: Any,
 ) -> SafeString:
     """A calendar of the events at ``events`` (an ``EventFeedView``'s URL):
@@ -44,7 +45,8 @@ def ec_calendar(
 
     ``resources``: its resources too, from the same view (``?resources=1``),
     for the resource views. ``url_state``: its view and date in the page's
-    URL. ``highlight_today``: today tinted (never in a day's view)."""
+    URL. ``highlight_today``: today tinted (never in a day's view).
+    ``date_picker``: a date field in its toolbar, to go to a date."""
     separator = "&" if "?" in events else "?"
     config = calendar_config(
         context["request"],
@@ -54,6 +56,15 @@ def ec_calendar(
         resources={"url": f"{events}{separator}resources=1"} if resources else None,
         url_state=url_state,
         highlight_today=highlight_today,
+        date_picker=date_picker,
         options=options,
     )
     return Calendar(config, id=id).render()
+
+
+@register.simple_tag(takes_context=True)
+def ec_calendar_inline(context: template.Context, inline_admin_formset: Any) -> Any:
+    """A ``CalendarInline``'s calendar, of the object of its change page
+    (``original``); None: it isn't saved yet."""
+    inline = inline_admin_formset.opts
+    return inline.get_calendar(context["request"], context.get("original"))

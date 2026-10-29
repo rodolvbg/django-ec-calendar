@@ -40,6 +40,9 @@
  * each resource's in theirs; with `config.outsideHours` "block", they can't
  * be selected, clicked, nor moved to.
  *
+ * With `config.datePicker`, a date field in its toolbar goes to the date
+ * chosen (and follows the one it shows).
+ *
  * It follows the page's theme, light or dark (Django's admin, Unfold, a
  * "dark" class), else the system's. `window.djangoEcCalendar.setup()`
  * makes those added later.
@@ -225,7 +228,11 @@
             if (end) query.set("end", moment(end, dates));
             const id = resource ? resourceId(where) : null;
             if (id !== null) query.set(resource.param, id);
-            api.go(returning(`${options.add}?${query}`));
+            // Its add page may have its own (an inline's: its object).
+            const url = new URL(options.add, window.location.href);
+            for (const [name, value] of query)
+                url.searchParams.set(name, value);
+            api.go(returning(url.pathname + url.search));
         }
 
         function failed(info, error) {
@@ -495,13 +502,27 @@
                     : (info.event.resourceIds ?? []),
             );
 
+        // A date to go to (`config.datePicker`), in its toolbar.
+        const picker = document.createElement("input");
+        picker.type = "date";
+        picker.className = "django-ec-calendar-date";
+        picker.setAttribute("aria-label", texts.goToDate ?? "");
+        const range = options.options?.validRange ?? {};
+        if (range.start) picker.min = String(range.start).slice(0, 10);
+        if (range.end) picker.max = String(range.end).slice(0, 10);
+        picker.addEventListener("change", () => {
+            if (picker.value) calendar.setOption("date", picker.value);
+        });
+
         const state = options.urlState ? readState(options) : {};
         const views = options.views.length ? options.views : [];
         // (Its callbacks read `calendar` once it's made: when they're called.)
         const calendar = window.EventCalendar.create(target, {
             view: options.view,
             headerToolbar: {
-                start: "prev,next today",
+                start: options.datePicker
+                    ? "prev,next today datePicker"
+                    : "prev,next today",
                 center: "title",
                 end: views.join(","),
             },
@@ -528,6 +549,7 @@
             eventContent: content,
             datesSet(info) {
                 element.dataset.view = info.view.type;
+                picker.value = moment(info.view.currentStart, true);
                 if (!options.urlState) return;
                 const url = new URL(window.location.href);
                 url.searchParams.set("ec-view", info.view.type);
@@ -608,6 +630,10 @@
                 ? { eventDrop: moved, eventResize: moved }
                 : {}),
             ...options.options,
+            customButtons: {
+                datePicker: { content: { domNodes: [picker] } },
+                ...options.options?.customButtons,
+            },
             // Where it was (the page's URL), over where it opens.
             ...(state.view ? { view: state.view } : {}),
             ...(state.date ? { date: state.date } : {}),

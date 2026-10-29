@@ -1,0 +1,14 @@
+{% load ec_calendar i18n %}
+{# CalendarInline: the object's calendar. Its (empty) formset's management form, for the object's form. #}
+<div class="inline-group django-ec-calendar-inline" id="{{ inline_admin_formset.formset.prefix }}-group">
+  {{ inline_admin_formset.formset.management_form }}
+  <fieldset class="module">
+    <h2>{{ inline_admin_formset.opts.verbose_name_plural|capfirst }}</h2>
+    {% ec_calendar_inline inline_admin_formset as calendar %}
+    {% if calendar %}
+      {{ calendar }}
+    {% else %}
+      <p class="help">{% translate "Save it first to see its calendar." %}</p>
+    {% endif %}
+  </fieldset>
+</div>

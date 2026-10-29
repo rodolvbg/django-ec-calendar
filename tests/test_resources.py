@@ -419,7 +419,7 @@ class TestBackToTheCalendar:
 
     @pytest.mark.parametrize(
         "url",
-        ["https://elsewhere.example/admin/agenda/appointment/calendar/", "/admin/"],
+        ["https://elsewhere.example/admin/agenda/appointment/calendar/", "/elsewhere/"],
     )
     def test_only_to_its_calendar(self, admin_client, maria, url):
         change = reverse("admin:agenda_appointment_change", args=[maria.pk])
