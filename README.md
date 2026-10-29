@@ -173,6 +173,81 @@ converted both ways).
 
 ![Whole days: a month of holidays](docs/screenshots/calendar-days.png)
 
+### Business hours
+
+When it's open, and the rest shaded:
+
+```python
+class AppointmentAdmin(CalendarAdminMixin, admin.ModelAdmin):
+    ...
+    calendar_business_hours = [
+        {"days": [1, 2, 3, 4, 5], "start": "09:00", "end": "14:00"},
+        {"days": [1, 2, 3, 4, 5], "start": "16:00", "end": "20:00"},
+    ]
+    calendar_outside_hours = "block"  # or "shade" (the default)
+
+    def get_calendar_business_hours(self, request, resource=None):
+        # The user's, the business', each professional's (resource: its id)…
+        return request.user.profile.hours or super().get_calendar_business_hours(
+            request, resource
+        )
+
+    def get_calendar_closed(self, request, start, end, resource=None):
+        # Holidays, a professional's days off…: (start, end), datetimes or dates.
+        holidays = Holiday.objects.filter(date__gte=start, date__lt=end)
+        return [(day.date, day.date + timedelta(days=1)) for day in holidays]
+```
+
+- **Days** are counted as JavaScript does (Sunday 0); without them, every
+  day. `"24:00"` is the end of the day.
+- **What's closed** (out of the hours, and `get_calendar_closed()`) comes
+  with the events, as background events (class
+  `django-ec-calendar-closed`): the calendar's in its views, and each
+  resource's in its column. Whole days show in the month views too.
+- **Fitted**: the time views go from the first time it opens to the last,
+  without the days it's closed (`calendar_fit_hours = False`: not; your
+  `calendar_options` win).
+- **`"block"`**: what's closed can't be selected, clicked, nor moved to —
+  in the browser, and checked by the server for moves
+  (`is_calendar_open(request, start, end, resource)`, for your own forms
+  too). The add page itself isn't restricted.
+- It's the calendar's, by the site's wall-clock time (its time zone). Each
+  request, and each resource, may have its own: nothing is assumed of where
+  they're kept.
+
+### Each request
+
+Each option has a method that takes the request, as the admin's
+`get_list_display()`:
+
+| Method | Default |
+|---|---|
+| `get_calendar_queryset(request)` | The changelist's objects. |
+| `get_calendar_view(request)`, `get_calendar_views(request)` | `calendar_view`, `calendar_views`. |
+| `get_calendar_detail_fields(request)` | `calendar_detail_fields`. |
+| `get_calendar_business_hours(request, resource=None)`, `get_calendar_closed(request, start, end, resource=None)` | `calendar_business_hours`; none. |
+| `get_calendar_resources(request)`, `get_calendar_resource_empty_label(request)` | Its field's; "No …". |
+| `get_calendar_resource_editable(request)` | `calendar_resource_editable`. |
+| `get_calendar_confirm_move(request)`, `get_calendar_filters(request)`, `get_calendar_url_state(request)`, `get_calendar_highlight_today(request)` | Their attributes. |
+| `has_calendar_move_permission(request, obj=None)` | `calendar_editable`, and one may change it. |
+| `has_calendar_add_permission(request)` | `calendar_selectable`, and one may add. |
+
+```python
+def has_calendar_move_permission(self, request, obj=None):
+    # Each professional moves their own.
+    allowed = super().has_calendar_move_permission(request, obj)
+    return allowed and (obj is None or obj.professional.user == request.user)
+```
+
+The browser and the server ask the same methods. Any other of
+EventCalendar's options, for a request: `get_calendar_config(request)`
+(calling `super()`, its `"options"`).
+
+The fields (`calendar_start_field`, `calendar_end_field`,
+`calendar_duration_field`, `calendar_resource_field`…) are the model's,
+the same for every request: what's shown, moved and saved must be the same
+fields.
+
 ### Time zones
 
 Times show as the wall-clock time of Django's current time zone, and are

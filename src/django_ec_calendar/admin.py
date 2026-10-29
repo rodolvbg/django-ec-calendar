@@ -25,7 +25,7 @@ from django.utils.translation import gettext
 from django.views.decorators.http import require_POST
 
 from .config import calendar_config, calendar_media
-from .source import NO_RESOURCE, CalendarSource
+from .source import NO_RESOURCE, ONE_DAY, CalendarSource
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -68,7 +68,16 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
     ``calendar_title_field``, ``calendar_color_field``,
     ``calendar_detail_fields``, ``calendar_resource_field``);
     ``calendar_view`` and ``calendar_views``, which views;
-    ``calendar_options``, any other of EventCalendar's.
+    ``calendar_options``, any other of EventCalendar's;
+    ``calendar_business_hours`` (and ``get_calendar_closed()``), when it's
+    open.
+
+    Each option has its method, which takes the request (as the admin's
+    ``get_list_display()``): ``get_calendar_view()``,
+    ``get_calendar_views()``, ``get_calendar_detail_fields()``,
+    ``get_calendar_business_hours()``…; who may move an event, or add one
+    from the calendar, is ``has_calendar_move_permission()`` and
+    ``has_calendar_add_permission()``.
     """
 
     #: The view it opens on.
@@ -109,6 +118,52 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
 
     def get_source_model(self) -> type[Model]:
         return self.model
+
+    # Its options, for each request -------------------------------------------
+
+    def get_calendar_view(self, request: HttpRequest) -> str:
+        """The view it opens on (``calendar_view``)."""
+        return self.calendar_view
+
+    def get_calendar_views(self, request: HttpRequest) -> Sequence[str]:
+        """The views one can switch between (``calendar_views``)."""
+        return self.calendar_views
+
+    def get_calendar_confirm_move(self, request: HttpRequest) -> bool:
+        """Whether a move asks first (``calendar_confirm_move``)."""
+        return self.calendar_confirm_move
+
+    def get_calendar_resource_editable(self, request: HttpRequest) -> bool:
+        """Whether a move may change an event's resource
+        (``calendar_resource_editable``, and its field is editable)."""
+        field = self._field(self.calendar_resource_field)
+        return bool(self.calendar_resource_editable and field.editable)
+
+    def get_calendar_filters(self, request: HttpRequest) -> bool:
+        """Whether its page shows the changelist's filters and search
+        (``calendar_filters``)."""
+        return self.calendar_filters
+
+    def get_calendar_url_state(self, request: HttpRequest) -> bool:
+        """Whether its view and date go in its page's URL
+        (``calendar_url_state``)."""
+        return self.calendar_url_state
+
+    def get_calendar_highlight_today(self, request: HttpRequest) -> bool:
+        """Whether today is tinted (``calendar_highlight_today``)."""
+        return self.calendar_highlight_today
+
+    def has_calendar_move_permission(
+        self, request: HttpRequest, obj: Model | None = None
+    ) -> bool:
+        """Whether one may drag ``obj`` (none: any event) to change it:
+        ``calendar_editable``, and one may change it."""
+        return bool(self.calendar_editable and self.has_change_permission(request, obj))
+
+    def has_calendar_add_permission(self, request: HttpRequest) -> bool:
+        """Whether selecting dates opens the add page with them:
+        ``calendar_selectable``, and one may add."""
+        return bool(self.calendar_selectable and self.has_add_permission(request))
 
     def _url_name(self, name: str) -> str:
         opts = self.model._meta
@@ -159,9 +214,7 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
         )
         if url:
             event.setdefault("extendedProps", {})["url"] = url
-        event["editable"] = bool(
-            self.calendar_editable and self.has_change_permission(request, obj)
-        )
+        event["editable"] = self.has_calendar_move_permission(request, obj)
         if not self.has_end:
             event["durationEditable"] = False  # No end to change.
         return event
@@ -241,7 +294,7 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
             return JsonResponse(
                 {"error": gettext("It doesn't exist any more.")}, status=404
             )
-        if not (self.calendar_editable and self.has_change_permission(request, obj)):
+        if not self.has_calendar_move_permission(request, obj):
             raise PermissionDenied
         values = self.moved_values(request.POST.get("start"), request.POST.get("end"))
         if values is None:
@@ -251,7 +304,7 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
         resource = request.POST.get("resource")
         if resource is not None and self.calendar_resource_field:
             field = self._field(self.calendar_resource_field)
-            if not (self.calendar_resource_editable and field.editable):
+            if not self.get_calendar_resource_editable(request):
                 message = gettext("It can't be moved to another %(name)s.")
                 return JsonResponse(
                     {"error": message % {"name": field.verbose_name}}, status=400
@@ -270,6 +323,12 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
                 names.append(field.name)
         for name, value in values.items():
             setattr(obj, name, value)
+        if self.calendar_outside_hours == "block" and not self._open_for(
+            request, obj, resource
+        ):
+            return JsonResponse(
+                {"error": gettext("It's out of the business hours.")}, status=400
+            )
         try:
             # What it changes as the model checks it (and its clean()).
             obj.full_clean(
@@ -294,17 +353,36 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
         self.log_change(request, obj, [{"changed": {"fields": fields}}])  # type: ignore[attr-defined]
         return JsonResponse({"event": self.get_calendar_event(request, obj)})
 
+    def _open_for(self, request: HttpRequest, obj: Model, resource: str | None) -> bool:
+        """Whether ``obj``, where it's been moved, is in the hours: of
+        ``resource`` (where it's been moved to), else of its own."""
+        start = getattr(obj, self.calendar_start_field)
+        end = self.get_calendar_event_end(obj)
+        if self.dates_only:
+            end = (end or start) + ONE_DAY
+        if resource is not None:
+            resources: list[str | None] = [resource]
+        elif self.calendar_resource_field:
+            resources = list(self.get_calendar_resource_ids(obj))
+        else:
+            resources = [None]
+        return all(
+            self.is_calendar_open(request, start, end, item) for item in resources
+        )
+
     # The pages ----------------------------------------------------------------
 
     def get_calendar_config(self, request: HttpRequest) -> dict[str, Any]:
         """The calendar's configuration, for its script."""
         filters = self._changelist_request(request).GET
-        add = None
-        if self.calendar_selectable and self.has_add_permission(request):
-            add = self._reverse("add")
-        move = None
-        if self.calendar_editable and self.has_change_permission(request):
-            move = self._reverse("calendar_move")
+        add = (
+            self._reverse("add") if self.has_calendar_add_permission(request) else None
+        )
+        move = (
+            self._reverse("calendar_move")
+            if self.has_calendar_move_permission(request)
+            else None
+        )
         resources = resource = None
         if self.calendar_resource_field:
             field = self._field(self.calendar_resource_field)
@@ -313,25 +391,30 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
             resource = {
                 "param": field.name,
                 "empty": NO_RESOURCE,
-                "editable": bool(self.calendar_resource_editable and field.editable),
+                "editable": self.get_calendar_resource_editable(request),
                 "message": message % {"name": field.verbose_name},
             }
         return calendar_config(
             request,
             events=cast("str", self._reverse("calendar_events")),
             params={name: str(value) for name, value in filters.items()},
-            view=self.calendar_view,
-            views=self.calendar_views,
+            view=self.get_calendar_view(request),
+            views=self.get_calendar_views(request),
             add=add,
             move=move,
             dates_only=self.dates_only,
             resources=resources,
             resource=resource,
-            url_state=self.calendar_url_state,
-            highlight_today=self.calendar_highlight_today,
-            confirm_move=self.calendar_confirm_move,
+            url_state=self.get_calendar_url_state(request),
+            highlight_today=self.get_calendar_highlight_today(request),
+            confirm_move=self.get_calendar_confirm_move(request),
+            outside_hours=self.calendar_outside_hours,
             return_param=RETURN_PARAM,
-            options=self.calendar_options,
+            # Fitted to the business hours, unless its own options say.
+            options={
+                **self.get_calendar_hours_options(request),
+                **self.calendar_options,
+            },
         )
 
     def calendar_page_view(self, request: HttpRequest) -> HttpResponse:
@@ -342,7 +425,7 @@ class CalendarAdminMixin(CalendarSource, BaseModelAdmin):
         filters = self._changelist_request(request).GET
         changelist = cast("str", self._reverse("changelist"))
         cl = None
-        if self.calendar_filters:
+        if self.get_calendar_filters(request):
             try:
                 cl = self.get_calendar_changelist(request)
             except IncorrectLookupParameters:

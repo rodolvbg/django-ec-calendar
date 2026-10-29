@@ -5,8 +5,15 @@ from unfold.admin import ModelAdmin
 from unfold.sites import UnfoldAdminSite
 
 from django_ec_calendar import CalendarAdminMixin
+from django_ec_calendar.source import ONE_DAY
 
 from .models import Appointment, Booking, Holiday, Professional, Room
+
+#: The professionals with hours of their own (the rest: the calendar's).
+PROFESSIONAL_HOURS = {
+    "Ana": {"start": "09:00", "end": "14:00"},
+    "Luis": {"start": "16:00", "end": "20:00"},
+}
 
 site = UnfoldAdminSite(name="admin")
 
@@ -56,7 +63,36 @@ class AppointmentAdmin(CalendarAdminMixin, ModelAdmin):
     calendar_view = "resourceTimeGridDay"
     calendar_views = ("resourceTimeGridDay", "resourceTimeGridWeek", "listWeek")
     calendar_editable = True
-    calendar_options = {"slotMinTime": "08:00", "slotMaxTime": "20:00"}
+
+    # Weekdays, 9 to 14 and 16 to 20: the rest shaded, and not to be booked.
+    calendar_business_hours = [
+        {"days": [1, 2, 3, 4, 5], "start": "09:00", "end": "14:00"},
+        {"days": [1, 2, 3, 4, 5], "start": "16:00", "end": "20:00"},
+    ]
+    calendar_outside_hours = "block"
+
+    def get_calendar_business_hours(self, request, resource=None):
+        # Each professional's own: Ana in the mornings, Luis in the afternoons.
+        name = PROFESSIONAL_HOURS.get(self._professional(resource))
+        if name:
+            return [{"days": [1, 2, 3, 4, 5], **name}]
+        return super().get_calendar_business_hours(request, resource)
+
+    def _professional(self, resource):
+        professional = (
+            Professional.objects.filter(pk=resource).first()
+            if resource and resource.isdigit()
+            else None
+        )
+        return professional.name if professional else None
+
+    def get_calendar_closed(self, request, start, end, resource=None):
+        # The holidays: closed, all day.
+        return [
+            (holiday.first_day, (holiday.last_day or holiday.first_day) + ONE_DAY)
+            for holiday in Holiday.objects.filter(first_day__lt=end)
+            if (holiday.last_day or holiday.first_day) >= start
+        ]
 
     def get_calendar_queryset(self, request):
         return super().get_calendar_queryset(request).exclude(status="cancelled")

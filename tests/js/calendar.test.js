@@ -872,3 +872,117 @@ describe("today", () => {
         ).toBe(true);
     });
 });
+
+describe("its business hours", () => {
+    const at = (hour) =>
+        new Date(`2026-10-29T${String(hour).padStart(2, "0")}:00:00`);
+    const closed = (from, to, resourceIds = []) => ({
+        start: at(from),
+        end: at(to),
+        resourceIds,
+        extendedProps: { closed: true },
+    });
+    const week = { type: "timeGridWeek" };
+    const byResource = { type: "resourceTimeGridDay" };
+    const CLOSED = [
+        closed(0, 9),
+        closed(20, 23),
+        closed(14, 23, ["1"]),
+        closed(0, 16, ["2"]),
+    ];
+
+    async function calendar(config) {
+        page(config);
+        const api = await load();
+        api.go = vi.fn();
+        created.at(-1).getEvents = () => [
+            ...CLOSED,
+            { start: at(10), end: at(11), resourceIds: [], extendedProps: {} },
+        ];
+        return api;
+    }
+
+    it("shows the calendar's in its views, each resource's in theirs", async () => {
+        await calendar(CONFIG);
+        const shown = (view) =>
+            CLOSED.filter((event) => options().eventFilter({ event, view }));
+        expect(shown(week)).toEqual([CLOSED[0], CLOSED[1]]);
+        expect(shown(byResource)).toEqual([CLOSED[2], CLOSED[3]]);
+        // The others: always.
+        expect(
+            options().eventFilter({ event: { extendedProps: {} }, view: week }),
+        ).toBe(true);
+        expect(options().eventFilter({ event: {}, view: week })).toBe(true);
+    });
+
+    it("only shaded, by default", async () => {
+        await calendar(CONFIG);
+        expect(options().selectConstraint).toBeUndefined();
+        expect(options().dragConstraint).toBeUndefined();
+        options().dateClick({ date: at(8), allDay: false, view: week });
+        expect(window.djangoEcCalendar.go).toHaveBeenCalledOnce();
+    });
+
+    it("blocked: not selected, clicked, nor moved to", async () => {
+        const api = await calendar({ ...CONFIG, outsideHours: "block" });
+        const o = options();
+        expect(
+            o.selectConstraint({ start: at(10), end: at(12), view: week }),
+        ).toBe(true);
+        expect(
+            o.selectConstraint({ start: at(8), end: at(10), view: week }),
+        ).toBe(false);
+        // Each resource, its own.
+        const select = (from, to, id) =>
+            o.selectConstraint({
+                start: at(from),
+                end: at(to),
+                view: byResource,
+                resource: { id },
+            });
+        expect(select(10, 12, "1")).toBe(true);
+        expect(select(10, 12, "2")).toBe(false);
+        expect(select(15, 16, "1")).toBe(false);
+        expect(
+            o.selectConstraint({ start: at(8), end: at(9), view: byResource }),
+        ).toBe(true); // No resource: none of theirs.
+        const drop = (from, to, extra) =>
+            o.dragConstraint({
+                event: {
+                    start: at(from),
+                    end: to === null ? null : at(to),
+                    resourceIds: ["1"],
+                },
+                view: byResource,
+                ...extra,
+            });
+        expect(drop(10, 11)).toBe(true);
+        expect(drop(15, 16)).toBe(false);
+        expect(drop(10, 11, { newResource: { id: "2" } })).toBe(false);
+        expect(drop(17, 18, { newResource: { id: 2 } })).toBe(true);
+        expect(drop(10, null)).toBe(true);
+        expect(o.resizeConstraint).toBe(o.dragConstraint);
+        expect(
+            o.dragConstraint({
+                event: { start: at(8), end: at(9) },
+                view: byResource,
+            }),
+        ).toBe(true); // No resources of its own: none closed.
+        o.dateClick({ date: at(8), allDay: false, view: week });
+        expect(api.go).not.toHaveBeenCalled();
+        o.dateClick({
+            date: at(10),
+            allDay: false,
+            view: byResource,
+            resource: { id: "1" },
+        });
+        expect(api.go).toHaveBeenCalledOnce();
+        o.dateClick({
+            date: at(10),
+            allDay: false,
+            view: byResource,
+            resource: { id: "2" },
+        });
+        expect(api.go).toHaveBeenCalledOnce();
+    });
+});

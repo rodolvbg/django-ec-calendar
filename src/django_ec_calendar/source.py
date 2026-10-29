@@ -18,7 +18,7 @@ from django.core.exceptions import FieldDoesNotExist, ImproperlyConfigured
 from django.db import models
 from django.db.models import Q
 from django.utils import formats, timezone
-from django.utils.dateparse import parse_date, parse_datetime
+from django.utils.dateparse import parse_date, parse_datetime, parse_time
 from django.utils.translation import gettext
 
 if TYPE_CHECKING:
@@ -31,6 +31,34 @@ ONE_DAY = datetime.timedelta(days=1)
 
 #: The resource of the events without one (a nullable field's empty value).
 NO_RESOURCE = "__none__"
+
+#: A closed time, as a background event's class.
+CLOSED = "django-ec-calendar-closed"
+
+#: A day of the week as EventCalendar (and JavaScript) counts them: Sunday 0.
+Weekday = int
+
+
+def _clock(value: str, *, end: bool = False) -> datetime.timedelta:
+    """``"09:30"`` as the time from midnight (``"24:00"``: the day's end)."""
+    if end and value in ("24:00", "24:00:00"):
+        return ONE_DAY
+    moment = parse_time(value)
+    if moment is None:
+        raise ImproperlyConfigured(f"Business hours: {value!r} isn't a time.")
+    return datetime.timedelta(
+        hours=moment.hour, minutes=moment.minute, seconds=moment.second
+    )
+
+
+def _wall_clock(value: Any) -> datetime.datetime:
+    """A datetime (aware: in the current time zone) or a date (its midnight)
+    as a wall-clock time, without a time zone."""
+    if isinstance(value, datetime.datetime):
+        if timezone.is_aware(value):
+            value = timezone.localtime(value)
+        return value.replace(tzinfo=None)
+    return datetime.datetime.combine(value, datetime.time())
 
 
 def parse_moment(value: str | None) -> datetime.datetime | datetime.date | None:
@@ -104,6 +132,15 @@ class CalendarSource:
     #: The resource of those without one (a nullable field's); none:
     #: "No <field>".
     calendar_resource_empty_label: str | None = None
+    #: When it's open: ``[{"days": [1, 2, 3, 4, 5], "start": "09:00", "end":
+    #: "14:00"}, ...]`` (days as JavaScript counts them: Sunday 0; no days:
+    #: every day). The rest is shaded. None: no hours.
+    calendar_business_hours: Sequence[dict[str, Any]] | None = None
+    #: Out of its hours (and its closed times): ``"shade"`` (shown as closed)
+    #: or ``"block"`` (also not to be selected, nor moved to).
+    calendar_outside_hours = "shade"
+    #: Whether the time views show only the business hours' times and days.
+    calendar_fit_hours = True
 
     def get_source_model(self) -> type[Model]:
         return self.model  # type: ignore[attr-defined]
@@ -210,11 +247,18 @@ class CalendarSource:
             return None
         return getattr(obj, self.calendar_start_field) + duration
 
-    def get_calendar_details(self, obj: Model) -> list[dict[str, str]]:
-        """``calendar_detail_fields``' labels and values, as text (those
+    def get_calendar_detail_fields(self, request: HttpRequest) -> Sequence[str]:
+        """The details of the events, for this request
+        (``calendar_detail_fields``)."""
+        return self.calendar_detail_fields
+
+    def get_calendar_details(
+        self, request: HttpRequest, obj: Model
+    ) -> list[dict[str, str]]:
+        """``get_calendar_detail_fields()``' labels and values, as text (those
         without a value left out)."""
         details = []
-        for name in self.calendar_detail_fields:
+        for name in self.get_calendar_detail_fields(request):
             field, attr, value = lookup_field(name, obj, self)  # type: ignore[arg-type]
             text = display_value(value, field)
             if text:
@@ -252,10 +296,9 @@ class CalendarSource:
         )
         if color:
             event["color"] = str(color)
-        if self.calendar_detail_fields:
-            event.setdefault("extendedProps", {})["details"] = (
-                self.get_calendar_details(obj)
-            )
+        details = self.get_calendar_details(request, obj)
+        if details:
+            event.setdefault("extendedProps", {})["details"] = details
         if self.calendar_resource_field:
             event["resourceIds"] = self.get_calendar_resource_ids(obj)
         return event
@@ -265,12 +308,176 @@ class CalendarSource:
     ) -> list[dict[str, Any]]:
         """The events of the objects the calendar's range shows
         (``?start=&end=``, as it asks for them)."""
-        found = self.in_range(
-            queryset,
-            parse_moment(request.GET.get("start")),
-            parse_moment(request.GET.get("end")),
+        start = parse_moment(request.GET.get("start"))
+        end = parse_moment(request.GET.get("end"))
+        found = self.in_range(queryset, start, end)
+        events = [self.get_calendar_event(request, obj) for obj in found]
+        if start is not None and end is not None:
+            events += self.get_calendar_closed_events(request, start, end)
+        return events
+
+    # Business hours ---------------------------------------------------------------
+
+    def get_calendar_business_hours(
+        self, request: HttpRequest, resource: str | None = None
+    ) -> Sequence[dict[str, Any]] | None:
+        """When it's open, for this request, and for ``resource`` (a
+        resource's id; None: the calendar's, in the views without
+        resources): ``calendar_business_hours`` by default, for all. None:
+        no hours (open always)."""
+        return self.calendar_business_hours
+
+    def get_calendar_closed(
+        self,
+        request: HttpRequest,
+        start: datetime.date,
+        end: datetime.date,
+        resource: str | None = None,
+    ) -> Sequence[tuple[Any, Any]]:
+        """Closed times between the dates ``start`` and ``end`` (exclusive),
+        besides the hours: holidays, holidays of ``resource``… As ``(start,
+        end)``: datetimes, or dates (whole days, shown in the month views
+        too). None by default."""
+        return ()
+
+    def _days(
+        self,
+        start: datetime.date | datetime.datetime,
+        end: datetime.date | datetime.datetime,
+    ) -> tuple[datetime.date, datetime.date]:
+        """The dates a range covers (its end exclusive, the day after when it
+        ends in the day)."""
+        first, last = _wall_clock(start), _wall_clock(end)
+        after = last.date() if last.time() == datetime.time() else last.date() + ONE_DAY
+        return first.date(), after
+
+    def get_calendar_closed_ranges(
+        self,
+        request: HttpRequest,
+        start: datetime.date | datetime.datetime,
+        end: datetime.date | datetime.datetime,
+        resource: str | None = None,
+    ) -> list[tuple[datetime.datetime, datetime.datetime, bool]]:
+        """When it's closed, in the days of ``[start, end)``: out of its
+        hours, and ``get_calendar_closed()``; as wall-clock times, and
+        whether it's a whole day."""
+        first, after = self._days(start, end)
+        ranges: list[tuple[datetime.datetime, datetime.datetime, bool]] = []
+        hours = self.get_calendar_business_hours(request, resource)
+        if hours is not None and not self.dates_only:
+            day = first
+            while day < after:
+                midnight = datetime.datetime.combine(day, datetime.time())
+                weekday = (day.weekday() + 1) % 7
+                opened = sorted(
+                    (_clock(item["start"]), _clock(item["end"], end=True))
+                    for item in hours
+                    if weekday in item.get("days", range(7))
+                )
+                cursor = datetime.timedelta()
+                for opens, closes in opened:
+                    if opens > cursor:
+                        ranges.append((midnight + cursor, midnight + opens, False))
+                    cursor = max(cursor, closes)
+                if cursor < ONE_DAY:
+                    ranges.append((midnight + cursor, midnight + ONE_DAY, False))
+                day += ONE_DAY
+        for begins, ends in self.get_calendar_closed(request, first, after, resource):
+            whole = not isinstance(begins, datetime.datetime)
+            ranges.append((_wall_clock(begins), _wall_clock(ends), whole))
+        return ranges
+
+    def _closed_resources(self, request: HttpRequest) -> list[str | None]:
+        """Whose hours there are: the calendar's (None), and each resource's."""
+        resources: list[str | None] = [None]
+        if self.calendar_resource_field:
+            resources += [item["id"] for item in self.get_calendar_resources(request)]
+        return resources
+
+    def get_calendar_closed_events(
+        self,
+        request: HttpRequest,
+        start: datetime.date | datetime.datetime,
+        end: datetime.date | datetime.datetime,
+    ) -> list[dict[str, Any]]:
+        """The closed times of ``[start, end)``, as background events: the
+        calendar's, and each resource's (in its column). A whole day is an
+        all-day one (for the month views), and the same times (for the time
+        views, whose all-day row is apart)."""
+        events = []
+        for resource in self._closed_resources(request):
+            for begins, ends, whole in self.get_calendar_closed_ranges(
+                request, start, end, resource
+            ):
+                shown = [(False, begins, ends)]
+                if whole:
+                    shown.append((True, begins, ends))
+                for all_day, first, last in shown:
+                    event: dict[str, Any] = {
+                        "start": first.date().isoformat()
+                        if all_day
+                        else self.format_moment(first),
+                        "end": last.date().isoformat()
+                        if all_day
+                        else self.format_moment(last),
+                        "allDay": all_day,
+                        "display": "background",
+                        "classNames": [CLOSED],
+                        "extendedProps": {"closed": True},
+                    }
+                    if resource is not None:
+                        event["resourceIds"] = [resource]
+                    events.append(event)
+        return events
+
+    def is_calendar_open(
+        self,
+        request: HttpRequest,
+        start: datetime.date | datetime.datetime,
+        end: datetime.date | datetime.datetime | None,
+        resource: str | None = None,
+    ) -> bool:
+        """Whether ``[start, end)`` is in its hours, for ``resource`` (and
+        none of its closed times)."""
+        begins = _wall_clock(start)
+        ends = _wall_clock(end) if end is not None else begins
+        if ends <= begins:
+            ends = begins + datetime.timedelta(microseconds=1)
+        return not any(
+            closed_start < ends and closed_end > begins
+            for closed_start, closed_end, _ in self.get_calendar_closed_ranges(
+                request, begins, ends, resource
+            )
         )
-        return [self.get_calendar_event(request, obj) for obj in found]
+
+    def get_calendar_hours_options(self, request: HttpRequest) -> dict[str, Any]:
+        """EventCalendar's options that fit the time views to the business
+        hours (``calendar_fit_hours``): from the first time it opens to the
+        last (``slotMinTime``, ``slotMaxTime``), without the days it's
+        closed (``hiddenDays``); of the calendar and its resources."""
+        if not self.calendar_fit_hours or self.dates_only:
+            return {}
+        hours: list[dict[str, Any]] = []
+        for resource in self._closed_resources(request):
+            hours += list(self.get_calendar_business_hours(request, resource) or ())
+        if not hours:
+            return {}
+
+        def clock(delta: datetime.timedelta) -> str:
+            seconds = int(delta.total_seconds())
+            return f"{seconds // 3600:02d}:{seconds % 3600 // 60:02d}:00"
+
+        days = set()
+        for item in hours:
+            days.update(item.get("days", range(7)))
+        options: dict[str, Any] = {
+            "slotMinTime": clock(min(_clock(item["start"]) for item in hours)),
+            "slotMaxTime": clock(max(_clock(item["end"], end=True) for item in hours)),
+        }
+        hidden = [day for day in range(7) if day not in days]
+        if hidden and len(hidden) < 7:
+            options["hiddenDays"] = hidden
+        return options
 
     # Resources ----------------------------------------------------------------
 
@@ -300,7 +507,7 @@ class CalendarSource:
             return bool(field.null)
         return bool(field.blank or field.null)
 
-    def get_calendar_resource_empty_label(self) -> str:
+    def get_calendar_resource_empty_label(self, request: HttpRequest) -> str:
         if self.calendar_resource_empty_label is not None:
             return self.calendar_resource_empty_label
         field = self._field(self.calendar_resource_field)
@@ -325,7 +532,10 @@ class CalendarSource:
             resources = [{"id": str(obj.pk), "title": str(obj)} for obj in related]
         if self.resource_has_empty:
             resources.append(
-                {"id": NO_RESOURCE, "title": self.get_calendar_resource_empty_label()}
+                {
+                    "id": NO_RESOURCE,
+                    "title": self.get_calendar_resource_empty_label(request),
+                }
             )
         return resources
 

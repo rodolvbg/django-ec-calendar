@@ -144,3 +144,7 @@ msgstr "Valor de %(name)s no válido."
 #, python-format
 msgid "It can't be moved to another %(name)s."
 msgstr "No se puede cambiar de %(name)s."
+
+#: admin.py
+msgid "It's out of the business hours."
+msgstr "Está fuera del horario."

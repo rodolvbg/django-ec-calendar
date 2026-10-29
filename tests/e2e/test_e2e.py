@@ -328,6 +328,23 @@ class TestAppointments(_AdminE2ETestCase):
 
     def setUp(self) -> None:
         super().setUp()
+        from django.contrib import admin
+
+        # Open always, whatever day the tests run (TestHours has its own).
+        model_admin = admin.site._registry[Appointment]
+        self.hours: list[dict] | None = None
+        model_admin.get_calendar_business_hours = lambda request, resource=None: (
+            self.hours
+        )
+        model_admin.get_calendar_closed = lambda *args, **kwargs: ()
+        # Its morning in sight.
+        model_admin.calendar_options = {"slotMinTime": "08:00", "slotMaxTime": "20:00"}
+        for name in (
+            "get_calendar_business_hours",
+            "get_calendar_closed",
+            "calendar_options",
+        ):
+            self.addCleanup(delattr, model_admin, name)
         self.ana = Professional.objects.create(name="Ana")
         self.luis = Professional.objects.create(name="Luis")
         start = timezone.make_aware(
@@ -421,6 +438,40 @@ class TestAppointments(_AdminE2ETestCase):
         header = page.locator(".ec-header").first
         expect(header).to_contain_text("Luis")
         assert "Ana" not in header.inner_text()
+
+
+class TestHours(TestAppointments):
+    """Open from midnight to noon, every day: blocked out of it."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.hours = [{"start": "00:00", "end": "12:00"}]
+
+    def test_shaded_and_not_moved_out_of_them(self):
+        self.open()
+        page = self.page
+        expect(
+            page.locator(".ec-bg-event.django-ec-calendar-closed").first
+        ).to_be_attached()
+        event = page.locator(".ec-event", has_text="María")
+        box = event.bounding_box()
+        assert box is not None
+        hour = box["height"]  # An hour (9 to 10).
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 5)
+        page.mouse.down()
+        # To 14:00: closed. It stays (where it was allowed).
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 5 + 5 * hour, steps=20)
+        page.mouse.up()
+        page.wait_for_timeout(400)
+        self.maria.refresh_from_db()
+        assert self.maria.start.astimezone(timezone.get_current_timezone()).hour < 12
+
+    # Its other tests, with hours: the same.
+    test_its_details_and_no_tint_in_a_day = None
+    test_a_move_one_says_no_to_goes_back = None
+    test_back_where_it_was_after_a_save = None
+    test_its_filters_keep_its_place = None
+    test_dragged_to_another_professional = None
 
 
 class TestPage(_AdminE2ETestCase):

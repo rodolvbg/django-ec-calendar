@@ -28,6 +28,11 @@
  * place. With `config.returnParam`, the pages it opens get its URL, to come
  * back to it after a save. A move asks first, with `config.confirmMove`.
  *
+ * Closed times (background events with `extendedProps.closed`: out of the
+ * business hours) are the calendar's in the views without resources, and
+ * each resource's in theirs; with `config.outsideHours` "block", they can't
+ * be selected, clicked, nor moved to.
+ *
  * It follows the page's theme, light or dark (Django's admin, Unfold, a
  * "dark" class), else the system's. `window.djangoEcCalendar.setup()`
  * makes those added later.
@@ -301,8 +306,50 @@
             return { domNodes: nodes };
         }
 
+        const isResourceView = (view) => view.type.startsWith("resource");
+
+        /** Whether an event is a closed time of this view: the calendar's
+         * in a view without resources, a resource's in theirs. */
+        const closedHere = (event, view) =>
+            Boolean(event.resourceIds?.length) === isResourceView(view);
+
+        /** Whether `[start, end)` is open, for those resources (their ids;
+         * none: the calendar's). */
+        function isOpen(start, end, view, resources = []) {
+            const until = end ?? new Date(start.getTime() + 1);
+            return !calendar
+                .getEvents()
+                .some(
+                    (event) =>
+                        event.extendedProps?.closed &&
+                        closedHere(event, view) &&
+                        (!isResourceView(view) ||
+                            resources.some((id) =>
+                                event.resourceIds
+                                    .map(String)
+                                    .includes(String(id)),
+                            )) &&
+                        event.start < until &&
+                        event.end > start,
+                );
+        }
+
+        const blocks = options.outsideHours === "block";
+
+        /** Where an event was dropped, or resized: open? */
+        const movable = (info) =>
+            isOpen(
+                info.event.start,
+                info.event.end,
+                info.view,
+                info.newResource
+                    ? [info.newResource.id]
+                    : (info.event.resourceIds ?? []),
+            );
+
         const state = options.urlState ? readState(options) : {};
         const views = options.views.length ? options.views : [];
+        // (Its callbacks read `calendar` once it's made: when they're called.)
         const calendar = window.EventCalendar.create(target, {
             view: options.view,
             headerToolbar: {
@@ -367,7 +414,35 @@
                     add(info.start, info.end, info.allDay, info.resource);
                 }
             },
+            // The closed times of this view only.
+            eventFilter: (info) =>
+                !info.event.extendedProps?.closed ||
+                closedHere(info.event, info.view),
+            ...(blocks
+                ? {
+                      selectConstraint: (info) =>
+                          isOpen(
+                              info.start,
+                              info.end,
+                              info.view,
+                              info.resource ? [info.resource.id] : [],
+                          ),
+                      dragConstraint: movable,
+                      resizeConstraint: movable,
+                  }
+                : {}),
             dateClick(info) {
+                if (
+                    blocks &&
+                    !isOpen(
+                        info.date,
+                        null,
+                        info.view,
+                        info.resource ? [info.resource.id] : [],
+                    )
+                ) {
+                    return;
+                }
                 const dates = info.allDay || options.datesOnly;
                 const detail = {
                     start: moment(info.date, dates),

@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Business hours: `calendar_business_hours` and
+  `get_calendar_business_hours(request, resource=None)` (the calendar's,
+  each resource's), `get_calendar_closed()` (holidays, days off), shaded as
+  background events, with the time views fitted to them
+  (`calendar_fit_hours`), and, with `calendar_outside_hours = "block"`, not
+  to be selected, clicked nor moved to (checked by the server for moves;
+  `is_calendar_open()`).
+- A method for each option, taking the request: `get_calendar_view()`,
+  `get_calendar_views()`, `get_calendar_detail_fields()`,
+  `get_calendar_confirm_move()`, `get_calendar_resource_editable()`,
+  `get_calendar_filters()`, `get_calendar_url_state()`,
+  `get_calendar_highlight_today()`; and `has_calendar_move_permission(request,
+  obj=None)`, `has_calendar_add_permission(request)`, who may move each
+  event and add from the calendar.
+
+### Changed
+
+- `get_calendar_details(request, obj)` and
+  `get_calendar_resource_empty_label(request)` take the request.
+
 ## [0.1.1] - 2026-10-29
 
 ### Added

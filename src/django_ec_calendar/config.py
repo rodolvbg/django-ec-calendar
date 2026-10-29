@@ -122,6 +122,7 @@ def calendar_config(
     url_state: bool = True,
     highlight_today: bool = True,
     confirm_move: bool = False,
+    outside_hours: str = "shade",
     return_param: str | None = None,
     options: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -136,7 +137,9 @@ def calendar_config(
     whether the view and its date go in the page's URL (``ec-view``,
     ``ec-date``), and are read from it.
     ``highlight_today``: whether today is tinted (never in a day's view).
-    ``confirm_move``: whether a move asks first. ``return_param``: the
+    ``confirm_move``: whether a move asks first. ``outside_hours``: out of the
+    business hours (its background events), ``"shade"`` or ``"block"`` (not
+    to be selected, nor moved to). ``return_param``: the
     parameter that takes the calendar's URL to the pages it opens (to come
     back to it)."""
     language = get_language() or "en"
@@ -155,6 +158,7 @@ def calendar_config(
         "urlState": url_state,
         "highlightToday": highlight_today,
         "confirmMove": confirm_move,
+        "outsideHours": outside_hours,
         "returnParam": return_param,
         "locale": language,
         "firstDay": int(formats.get_format("FIRST_DAY_OF_WEEK")),

@@ -31,6 +31,11 @@ def at(hour, minute=0, day=29):
     return datetime.datetime(2026, 10, day, hour, minute, tzinfo=MADRID)
 
 
+def booked(events):
+    """The events but the closed times (background ones)."""
+    return [event for event in events if event.get("display") != "background"]
+
+
 def config(html):
     match = re.search(
         r'<script id="django-ec-calendar-config" type="application/json">'
@@ -105,7 +110,7 @@ class TestForeignKey:
 
     def test_the_events_resource(self, admin_client, maria):
         Appointment.objects.create(client="Pedro", start=at(12), minutes=30)
-        events = admin_client.get(f"{APPOINTMENTS}calendar/events/", DAY).json()
+        events = booked(admin_client.get(f"{APPOINTMENTS}calendar/events/", DAY).json())
         by_title = {event["title"]: event["resourceIds"] for event in events}
         assert by_title == {
             "María": [str(maria.professional_id)],
@@ -117,8 +122,8 @@ class TestForeignKey:
             f"{APPOINTMENTS}calendar/move/",
             {
                 "pk": maria.pk,
-                "start": "2026-10-29T10:00:00",
-                "end": "2026-10-29T10:45:00",
+                "start": "2026-10-29T17:00:00",  # In Luis' hours.
+                "end": "2026-10-29T17:45:00",
                 "resource": str(luis.pk),
                 "resource_from": str(maria.professional_id),
             },
@@ -126,7 +131,7 @@ class TestForeignKey:
         assert response.status_code == 200
         assert response.json()["event"]["resourceIds"] == [str(luis.pk)]
         maria.refresh_from_db()
-        assert (maria.professional, maria.start, maria.minutes) == (luis, at(10), 45)
+        assert (maria.professional, maria.start, maria.minutes) == (luis, at(17), 45)
         assert json.loads(LogEntry.objects.get().change_message) == [
             {"changed": {"fields": ["start", "minutes", "professional"]}}
         ]
@@ -183,7 +188,7 @@ class TestTheCalendarsQueryset:
         Appointment.objects.create(
             client="Old", start=at(15), minutes=30, status="cancelled"
         )
-        events = admin_client.get(f"{APPOINTMENTS}calendar/events/", DAY).json()
+        events = booked(admin_client.get(f"{APPOINTMENTS}calendar/events/", DAY).json())
         assert [event["title"] for event in events] == ["María"]
         # The list has it.
         assert "Old" in admin_client.get(APPOINTMENTS).content.decode()
@@ -370,7 +375,7 @@ class TestDurations:
         Appointment.objects.create(
             client="Long ago", professional=ana, start=at(9, day=20), minutes=30
         )
-        events = admin_client.get(f"{APPOINTMENTS}calendar/events/", DAY).json()
+        events = booked(admin_client.get(f"{APPOINTMENTS}calendar/events/", DAY).json())
         assert [event["title"] for event in events] == ["Night"]
 
     def test_none(self, db):
