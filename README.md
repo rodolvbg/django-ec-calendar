@@ -71,9 +71,14 @@ The changelist gets a "Calendar" link, next to "Add":
 - **Dragging** an event, or its end, changes its dates (and its
   resource), as `calendar_move_mode` says — off by default: a slip of the
   mouse would change an appointment. See [Dragging](#dragging).
-- **Where it was**: its view and date are in the page's URL (`ec-view`,
-  `ec-date`), so the back button, a save, the filters and a shared link
-  open it there (`calendar_url_state = False`: not).
+- **Where it was**: its view and date go in the page's URL (`ec-view`,
+  `ec-date`) when one goes elsewhere — opening it leaves its URL as it is
+  — so the back button, a save, the filters and a shared link open it
+  there (`calendar_url_state = False`: not). Their names, and the views':
+  `calendar_url_params = {"view": "vista", "date": "fecha"}`,
+  `calendar_url_views = {"timeGridWeek": "semana"}` (`?vista=semana`); the
+  return parameter, `calendar_return_param` (`_ec_calendar`). In the
+  template tag, `view_param` and `date_param`.
 - **Its views**: `calendar_views` — by default month, week, day and list
   (`dayGridMonth`, `timeGridWeek`, `timeGridDay`, `listMonth`; any of
   [EventCalendar's](https://github.com/vkurko/calendar#view), the
@@ -300,6 +305,7 @@ Each option has a method that takes the request, as the admin's
 | `get_calendar_resource_editable(request)` | `calendar_resource_editable`. |
 | `get_calendar_move_mode(request)` | `calendar_move_mode`. |
 | `get_calendar_date_picker(request)` | `calendar_date_picker`. |
+| `get_calendar_url_params(request)`, `get_calendar_url_views(request)`, `get_calendar_return_param(request)` | `calendar_url_params`, `calendar_url_views`, `calendar_return_param`. |
 | `get_calendar_filters(request)`, `get_calendar_url_state(request)`, `get_calendar_highlight_today(request)` | Their attributes. |
 | `has_calendar_move_permission(request, obj=None)` | Its move mode isn't `"off"`, and one may change it. |
 | `has_calendar_add_permission(request)` | `calendar_selectable`, and one may add. |

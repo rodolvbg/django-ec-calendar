@@ -27,7 +27,9 @@
  * With resources (`config.resources`), dropping an event in another one
  * changes it too (`config.resource.editable`), and adding sends it. With
  * `config.urlState`, the view and its date are in the page's URL (`ec-view`,
- * `ec-date`), read when it opens: back from an event's page, the same
+ * `ec-date`, or `config.urlParams`' names; the views by `config.urlViews`'
+ * names), read when it opens, and written only when one goes elsewhere
+ * (opening it leaves its URL as it is): back from an event's page, the same
  * place. With `config.returnParam`, the pages it opens get its URL, to come
  * back to it after a save.
  *
@@ -163,12 +165,29 @@
         return made;
     }
 
-    /** The view and date of the page's URL (`ec-view`, `ec-date`), if
-     * they're the calendar's. */
+    /** The parameters of the page's URL with its view and date. */
+    const DEFAULT_PARAMS = { view: "ec-view", date: "ec-date" };
+
+    /** The names of those of every calendar of the page (for its filters'
+     * links and forms to keep them). */
+    const stateParams = new Set(Object.values(DEFAULT_PARAMS));
+
+    const urlParams = (options) => ({
+        ...DEFAULT_PARAMS,
+        ...(options.urlParams ?? {}),
+    });
+
+    /** The view and date of the page's URL, if they're the calendar's (a
+     * view by its name in the URL, `config.urlViews`, or its own). */
     function readState(options) {
+        const names = urlParams(options);
         const query = new URLSearchParams(window.location.search);
-        const view = query.get("ec-view");
-        const date = query.get("ec-date") ?? "";
+        let view = query.get(names.view);
+        const date = query.get(names.date) ?? "";
+        const named = Object.entries(options.urlViews ?? {}).find(
+            ([, alias]) => alias === view,
+        );
+        if (named) view = named[0];
         return {
             view: [options.view, ...options.views].includes(view)
                 ? view
@@ -515,6 +534,12 @@
         });
 
         const state = options.urlState ? readState(options) : {};
+        const names = urlParams(options);
+        stateParams.add(names.view);
+        stateParams.add(names.date);
+        // What it shows: written in the URL only when it changes (not when
+        // it opens).
+        let shown = null;
         const views = options.views.length ? options.views : [];
         // (Its callbacks read `calendar` once it's made: when they're called.)
         const calendar = window.EventCalendar.create(target, {
@@ -550,11 +575,18 @@
             datesSet(info) {
                 element.dataset.view = info.view.type;
                 picker.value = moment(info.view.currentStart, true);
-                if (!options.urlState) return;
+                const now = `${info.view.type} ${moment(info.view.currentStart, true)}`;
+                const opening = shown === null;
+                if (!options.urlState || now === shown) return;
+                shown = now;
+                if (opening) return; // Its URL as it is.
                 const url = new URL(window.location.href);
-                url.searchParams.set("ec-view", info.view.type);
                 url.searchParams.set(
-                    "ec-date",
+                    names.view,
+                    options.urlViews?.[info.view.type] ?? info.view.type,
+                );
+                url.searchParams.set(
+                    names.date,
                     moment(info.view.currentStart, true),
                 );
                 window.history.replaceState(window.history.state, "", url);
@@ -646,7 +678,7 @@
      * search) keep its view and date. */
     function keepState(url) {
         const here = new URLSearchParams(window.location.search);
-        for (const name of ["ec-view", "ec-date"]) {
+        for (const name of stateParams) {
             if (here.has(name) && !url.searchParams.has(name)) {
                 url.searchParams.set(name, here.get(name));
             }

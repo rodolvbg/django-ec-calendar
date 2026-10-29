@@ -134,6 +134,8 @@ def calendar_config(
     resources: Sequence[Mapping[str, Any]] | Mapping[str, Any] | None = None,
     resource: Mapping[str, Any] | None = None,
     url_state: bool = True,
+    url_params: Mapping[str, str] | None = None,
+    url_views: Mapping[str, str] | None = None,
     highlight_today: bool = True,
     date_picker: bool = False,
     outside_hours: str = "shade",
@@ -149,7 +151,8 @@ def calendar_config(
     empty, editable, message}``: its field's name, the id of none, whether
     a move may change it, and what it says when it may not). ``url_state``:
     whether the view and its date go in the page's URL (``ec-view``,
-    ``ec-date``), and are read from it.
+    ``ec-date``, or ``url_params``' names; the views by ``url_views``'), and
+    are read from it.
     ``highlight_today``: whether today is tinted (never in a day's view).
     ``date_picker``: whether its toolbar has a date field, to go to one.
     ``move_mode``: how a drag goes (``"off"``, ``"save"``, ``"confirm"``,
@@ -172,6 +175,8 @@ def calendar_config(
         "resources": _resources(resources),
         "resource": dict(resource) if resource else None,
         "urlState": url_state,
+        "urlParams": {"view": "ec-view", "date": "ec-date", **(url_params or {})},
+        "urlViews": dict(url_views or {}),
         "highlightToday": highlight_today,
         "datePicker": date_picker,
         "moves": moves,

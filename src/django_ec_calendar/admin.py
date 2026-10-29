@@ -55,7 +55,7 @@ __all__ = [
 RETURN_PARAM = "_ec_calendar"
 
 #: What the calendar adds to the changelist's query string: not filters (its
-#: range; its view and date, in its page's URL).
+#: range; its view and date, in its page's URL, by default).
 CALENDAR_PARAMS = ("start", "end", "timeZone", "ec-view", "ec-date", RETURN_PARAM)
 
 
@@ -87,6 +87,9 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
 
     #: Whether the calendar's page shows the changelist's filters and search.
     calendar_filters = True
+    #: The parameter that takes the calendar's URL to the pages it opens:
+    #: after a save, back to it.
+    calendar_return_param = RETURN_PARAM
     #: The calendar's page.
     calendar_template = "django_ec_calendar/admin/calendar.html"
     #: The changelist's: the admin's, and a link to the calendar.
@@ -180,7 +183,20 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
         return {name: str(value) for name, value in filters.items()}
 
     def get_calendar_return_param(self, request: HttpRequest) -> str | None:
-        return RETURN_PARAM
+        """``calendar_return_param``."""
+        return self.calendar_return_param
+
+    def get_calendar_query_params(self, request: HttpRequest) -> set[str]:
+        """What the calendar adds to the changelist's query string: its
+        range, its view and date (``get_calendar_url_params()``), and the
+        return parameter. Not filters."""
+        return {
+            "start",
+            "end",
+            "timeZone",
+            *self.get_calendar_url_params(request).values(),
+            str(self.get_calendar_return_param(request)),
+        }
 
     def get_calendar_event_url(self, request: HttpRequest, obj: Model) -> str | None:
         """Its change page (read-only, for who may only view it)."""
@@ -195,7 +211,7 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
         without the calendar's own parameters."""
         changelist = copy.copy(request)
         query = request.GET.copy()
-        for name in CALENDAR_PARAMS:
+        for name in self.get_calendar_query_params(request):
             query.pop(name, None)
         changelist.GET = query  # type: ignore[assignment]
         return changelist
@@ -353,7 +369,7 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
         """The calendar the page was opened from (``_ec_calendar``): its page,
         or another of the admin's (an inline's, ``CalendarInline``), to go
         back to it; None: not from it (or not an admin's page)."""
-        url = request.GET.get(RETURN_PARAM, "")
+        url = request.GET.get(str(self.get_calendar_return_param(request)), "")
         try:
             admin = reverse(f"{self.admin_site.name}:index")
         except NoReverseMatch:

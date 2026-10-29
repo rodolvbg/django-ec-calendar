@@ -247,7 +247,7 @@ class TestBookings(_AdminE2ETestCase):
         )
         page.locator(".ec-event", has_text="Client call").click()
         expect(page).to_have_title(f"Open {call.pk}")
-        assert "/calendar/?" in page.url  # Still on it.
+        assert page.url.endswith("/booking/calendar/")  # Still on it, as it was.
 
     def test_in_another_time_zone_the_same_times(self):
         self.book("Client call", 1, 10, 12)
@@ -422,6 +422,9 @@ class TestAppointments(_AdminE2ETestCase):
     def test_back_where_it_was_after_a_save(self):
         self.open()
         page = self.page
+        # Opened: its URL as it was (no view, nor date).
+        page.wait_for_timeout(300)
+        assert page.url.endswith("/admin/agenda/appointment/calendar/")
         page.locator(".ec-toolbar button", has_text="List").click()
         expect(page).to_have_url(re.compile(r"ec-view=listWeek"))
         page.locator(".ec-event", has_text="María").click()

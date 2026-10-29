@@ -34,6 +34,8 @@ def ec_calendar(
     id: str = "",  # noqa: A002 - the element's.
     resources: bool = False,
     url_state: bool = True,
+    view_param: str = "ec-view",
+    date_param: str = "ec-date",
     highlight_today: bool = True,
     date_picker: bool = True,
     **options: Any,
@@ -45,7 +47,8 @@ def ec_calendar(
 
     ``resources``: its resources too, from the same view (``?resources=1``),
     for the resource views. ``url_state``: its view and date in the page's
-    URL. ``highlight_today``: today tinted (never in a day's view).
+    URL (``view_param``, ``date_param``: their names). ``highlight_today``:
+    today tinted (never in a day's view).
     ``date_picker``: a date field in its toolbar, to go to a date."""
     separator = "&" if "?" in events else "?"
     config = calendar_config(
@@ -55,6 +58,7 @@ def ec_calendar(
         views=views.split(),
         resources={"url": f"{events}{separator}resources=1"} if resources else None,
         url_state=url_state,
+        url_params={"view": view_param, "date": date_param},
         highlight_today=highlight_today,
         date_picker=date_picker,
         options=options,

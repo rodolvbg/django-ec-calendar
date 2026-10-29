@@ -520,6 +520,10 @@ describe("its theme", () => {
 describe("its place in the page's URL", () => {
     afterEach(() => window.history.replaceState(null, "", "/"));
 
+    const shown = (type, day) => ({
+        view: { type, currentStart: new Date(`${day}T00:00:00`) },
+    });
+
     it("opens where the URL says, and keeps it there", async () => {
         window.history.replaceState(
             null,
@@ -530,16 +534,80 @@ describe("its place in the page's URL", () => {
         await load();
         expect(options().view).toBe("dayGridMonth");
         expect(options().date).toBe("2026-11-02");
-        options().datesSet({
-            view: {
-                type: "timeGridWeek",
-                currentStart: new Date("2026-11-09T00:00:00"),
-            },
-        });
+        // Opening it: its URL as it is.
+        options().datesSet(shown("dayGridMonth", "2026-11-01"));
+        expect(window.location.search).toBe(
+            "?room=1&ec-view=dayGridMonth&ec-date=2026-11-02",
+        );
+        // Elsewhere: written.
+        options().datesSet(shown("timeGridWeek", "2026-11-09"));
         expect(window.location.search).toBe(
             "?room=1&ec-view=timeGridWeek&ec-date=2026-11-09",
         );
         expect(element().dataset.view).toBe("timeGridWeek");
+    });
+
+    it("opened without them, its URL stays without them", async () => {
+        window.history.replaceState(null, "", "/calendar/?room=1");
+        page({ ...CONFIG, urlState: true });
+        await load();
+        options().datesSet(shown("timeGridWeek", "2026-10-26"));
+        expect(window.location.search).toBe("?room=1");
+        // The same again (EventCalendar may say it twice): still not.
+        options().datesSet(shown("timeGridWeek", "2026-10-26"));
+        expect(window.location.search).toBe("?room=1");
+        options().datesSet(shown("timeGridWeek", "2026-11-02"));
+        expect(window.location.search).toBe(
+            "?room=1&ec-view=timeGridWeek&ec-date=2026-11-02",
+        );
+    });
+
+    it("by the names it's given, and its views' too", async () => {
+        window.history.replaceState(
+            null,
+            "",
+            "/calendar/?vista=semana&fecha=2026-11-02",
+        );
+        page({
+            ...CONFIG,
+            urlState: true,
+            urlParams: { view: "vista", date: "fecha" },
+            urlViews: { timeGridWeek: "semana", dayGridMonth: "mes" },
+        });
+        await load();
+        expect(options().view).toBe("timeGridWeek");
+        expect(options().date).toBe("2026-11-02");
+        options().datesSet(shown("timeGridWeek", "2026-11-02"));
+        options().datesSet(shown("dayGridMonth", "2026-11-01"));
+        expect(window.location.search).toBe("?vista=mes&fecha=2026-11-01");
+        // A view without a name of its own: by its own.
+        options().datesSet(shown("timeGridDay", "2026-11-03"));
+        expect(window.location.search).toBe(
+            "?vista=timeGridDay&fecha=2026-11-03",
+        );
+        // Its filters keep them, by their names.
+        const keep = document.createElement("div");
+        keep.setAttribute("data-django-ec-calendar-keep-state", "");
+        keep.innerHTML = '<a id="here" href="/calendar/?room=2">Blue</a>';
+        document.body.append(keep);
+        const stop = (event) => event.preventDefault();
+        document.addEventListener("click", stop);
+        document.getElementById("here").click();
+        document.removeEventListener("click", stop);
+        expect(document.getElementById("here").getAttribute("href")).toBe(
+            `${window.location.origin}/calendar/?room=2&vista=timeGridDay&fecha=2026-11-03`,
+        );
+    });
+
+    it("with a partial set of names, the rest by default", async () => {
+        window.history.replaceState(
+            null,
+            "",
+            "/calendar/?ec-view=dayGridMonth",
+        );
+        page({ ...CONFIG, urlState: true, urlParams: { date: "fecha" } });
+        await load();
+        expect(options().view).toBe("dayGridMonth");
     });
 
     it("not a view or a date it doesn't know", async () => {

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CalendarInline`: an object's calendar in its change page (the
   calendar of another model's objects related to it, its admin's), adding
   with the object filled in, and back to its page after a save.
+- The names of the URL's parameters with the view and the date
+  (`calendar_url_params`), the views' in it (`calendar_url_views`), and the
+  return parameter's (`calendar_return_param`); `view_param` and
+  `date_param` in the template tag.
 - A date picker in the toolbar (`calendar_date_picker`, on by default;
   `date_picker` in the template tag), to go to a date.
 
@@ -36,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A detail `get_<field>_display` is labelled by its field.
 
 ### Fixed
+
+- Opening the calendar leaves its page's URL as it is: its view and date
+  are written only when one goes elsewhere.
 
 - A move saved at once or after asking (`calendar_move_mode` `"save"`,
   `"confirm"`) leaves the event as the server says it is

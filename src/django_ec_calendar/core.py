@@ -27,6 +27,9 @@ if TYPE_CHECKING:
     from django.db.models import Model, QuerySet
     from django.http import HttpRequest
 
+#: The page's URL's parameters with its view and date (``calendar_url_state``).
+URL_PARAMS = {"view": "ec-view", "date": "ec-date"}
+
 #: How dragging an event (or its end) goes: not at all, saved at once,
 #: asked first, or kept until several are saved together.
 MOVE_MODES = ("off", "save", "confirm", "batch")
@@ -84,6 +87,12 @@ class CalendarMixin(CalendarSource):
     #: Whether its view and date go in its page's URL (``ec-view``,
     #: ``ec-date``): one comes back to the same place, and can share it.
     calendar_url_state = True
+    #: Their names: ``{"view": "vista", "date": "fecha"}`` (those not given,
+    #: ``URL_PARAMS``').
+    calendar_url_params: dict[str, str] = {}  # noqa: RUF012
+    #: The views' names in it: ``{"timeGridWeek": "semana"}`` (those not
+    #: given, their own).
+    calendar_url_views: dict[str, str] = {}  # noqa: RUF012
     #: Whether today is tinted (never in a day's view).
     calendar_highlight_today = True
     #: Whether its toolbar has a date field, to go to a date.
@@ -125,6 +134,15 @@ class CalendarMixin(CalendarSource):
         """Whether its view and date go in its page's URL
         (``calendar_url_state``)."""
         return self.calendar_url_state
+
+    def get_calendar_url_params(self, request: HttpRequest) -> dict[str, str]:
+        """The names of the URL's parameters with its view (``view``) and
+        date (``date``): ``calendar_url_params``, over ``URL_PARAMS``."""
+        return {**URL_PARAMS, **self.calendar_url_params}
+
+    def get_calendar_url_views(self, request: HttpRequest) -> dict[str, str]:
+        """The views' names in the URL (``calendar_url_views``)."""
+        return dict(self.calendar_url_views)
 
     def get_calendar_highlight_today(self, request: HttpRequest) -> bool:
         """Whether today is tinted (``calendar_highlight_today``)."""
@@ -264,6 +282,8 @@ class CalendarMixin(CalendarSource):
             resources=resources,
             resource=resource,
             url_state=self.get_calendar_url_state(request),
+            url_params=self.get_calendar_url_params(request),
+            url_views=self.get_calendar_url_views(request),
             highlight_today=self.get_calendar_highlight_today(request),
             date_picker=self.get_calendar_date_picker(request),
             outside_hours=self.calendar_outside_hours,
