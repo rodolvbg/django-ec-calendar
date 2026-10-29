@@ -364,7 +364,7 @@ which bubbles and can be cancelled — `preventDefault()`, and it isn't done
 | `django-ec-calendar:date-click` | `start`, `allDay`, `resource`, `jsEvent` | Opens the add page. |
 | `django-ec-calendar:select` | `start`, `end`, `allDay`, `resource`, `jsEvent` | Opens the add page. |
 | `django-ec-calendar:move` | `event`, `mode`, `save()`, `revert()`, `pend()` | As its mode says (see [Dragging](#dragging)). |
-| `django-ec-calendar:event-change` | `event`, `saved`, `error` | (After a move; not cancellable.) |
+| `django-ec-calendar:event-change` | `event`, `saved`, `error`, `savedEvent` (the server's, which the event now is) | (After a move; not cancellable.) |
 | `django-ec-calendar:batch-change` | `saved`, `events`, `errors` | (After several saved together; not cancellable.) |
 
 ```js

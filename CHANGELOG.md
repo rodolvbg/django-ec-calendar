@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A move saved at once or after asking (`calendar_move_mode` `"save"`,
+  `"confirm"`) leaves the event as the server says it is
+  (`get_calendar_event()`: its color, title, details, URL, resources…), not
+  as it was dropped, until the page was reloaded. The
+  `django-ec-calendar:event-change` event has it too (`savedEvent`).
+
 ## [0.1.2] - 2026-10-29
 
 ### Added

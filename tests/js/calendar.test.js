@@ -439,7 +439,7 @@ describe("its events", () => {
         await options().eventDrop({ event, revert: vi.fn() });
         await options().eventDrop({ event, revert: vi.fn() });
         expect(heard.map((e) => e.detail)).toEqual([
-            { event, saved: true, error: "" },
+            { event, saved: true, error: "", savedEvent: null },
             { event, saved: false, error: "No." },
         ]);
         expect(heard[0].cancelable).toBe(false);
@@ -1232,5 +1232,120 @@ describe("how a drag goes", () => {
         });
         await options().eventDrop(drop("1", "10"));
         expect(bar().textContent).toContain("1");
+    });
+});
+
+describe("a move saved, as the server says", () => {
+    const SERVER = {
+        id: "7",
+        title: "Call (Luis)",
+        start: "2026-10-29T17:00:00",
+        end: "2026-10-29T18:00:00",
+        allDay: false,
+        color: "#16a34a",
+        resourceIds: ["2"],
+        extendedProps: {
+            url: "/7/",
+            details: [{ label: "Status", value: "Booked" }],
+        },
+        editable: true,
+    };
+
+    async function moving(response) {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => response),
+        );
+        page({
+            ...CONFIG,
+            moveMode: "save",
+            resource: {
+                param: "p",
+                empty: "__none__",
+                editable: true,
+                message: "",
+            },
+        });
+        await load();
+        const calendar = created.at(-1);
+        calendar.updateEvent = vi.fn();
+        const heard = [];
+        element().addEventListener("django-ec-calendar:event-change", (e) =>
+            heard.push(e.detail),
+        );
+        const info = {
+            event: {
+                id: "7",
+                title: "Call",
+                start: new Date(),
+                end: null,
+                allDay: false,
+            },
+            revert: vi.fn(),
+            oldResource: { id: "1" },
+            newResource: { id: "2" },
+        };
+        return { calendar, heard, info };
+    }
+
+    it("its event, updated with the response", async () => {
+        const { calendar, heard, info } = await moving({
+            ok: true,
+            json: async () => ({ event: SERVER }),
+        });
+        await options().eventDrop(info);
+        expect(calendar.updateEvent).toHaveBeenCalledWith(SERVER);
+        expect(info.revert).not.toHaveBeenCalled();
+        expect(heard).toEqual([
+            { event: info.event, saved: true, error: "", savedEvent: SERVER },
+        ]);
+    });
+
+    it("without one in the response, as it was dropped", async () => {
+        const { calendar, heard, info } = await moving({ ok: true });
+        await options().eventDrop(info);
+        expect(calendar.updateEvent).not.toHaveBeenCalled();
+        expect(info.revert).not.toHaveBeenCalled();
+        expect(heard[0].savedEvent).toBe(null);
+    });
+
+    it("not saved: back where it was, as before", async () => {
+        const { calendar, heard, info } = await moving({
+            ok: false,
+            json: async () => ({ error: "It's out of the business hours." }),
+        });
+        await options().eventDrop(info);
+        expect(calendar.updateEvent).not.toHaveBeenCalled();
+        expect(info.revert).toHaveBeenCalledOnce();
+        expect(heard[0]).toEqual({
+            event: info.event,
+            saved: false,
+            error: "It's out of the business hours.",
+        });
+    });
+
+    it("asked first, the same", async () => {
+        vi.spyOn(window, "confirm").mockReturnValue(true);
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => ({
+                ok: true,
+                json: async () => ({ event: SERVER }),
+            })),
+        );
+        page({ ...CONFIG, moveMode: "confirm" });
+        await load();
+        created.at(-1).updateEvent = vi.fn();
+        await options().eventDrop({
+            event: {
+                id: "7",
+                title: "Call",
+                start: new Date(),
+                end: null,
+                allDay: false,
+            },
+            revert: vi.fn(),
+        });
+        expect(created.at(-1).updateEvent).toHaveBeenCalledWith(SERVER);
     });
 });

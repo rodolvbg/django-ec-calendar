@@ -21,7 +21,7 @@
  *   - `django-ec-calendar:move` ({event, mode, save(), revert(), pend()}:
  *     cancelled, the page does it, calling one of those);
  * and after a move, `django-ec-calendar:event-change` ({event, saved,
- * error}); after several saved together, `django-ec-calendar:batch-change`
+ * error, savedEvent: the server's}); after several saved together, `django-ec-calendar:batch-change`
  * ({saved, events, errors}).
  *
  * With resources (`config.resources`), dropping an event in another one
@@ -260,7 +260,8 @@
             ...(json ? { "Content-Type": "application/json" } : {}),
         });
 
-        /** Save a move now. */
+        /** Save a move now; saved, the event as the server says it is (its
+         * color, details, resources… may depend on where it went). */
         async function send(info) {
             say(texts.saving);
             try {
@@ -270,14 +271,22 @@
                     body: new URLSearchParams(payload(info)),
                     credentials: "same-origin",
                 });
-                if (!response.ok) {
-                    const data = await response.json().catch(() => ({}));
-                    throw new Error(data.error || texts.failed);
-                }
+                // No body (or not JSON): nothing of it.
+                const data = await Promise.resolve()
+                    .then(() => response.json())
+                    .catch(() => ({}));
+                if (!response.ok) throw new Error(data?.error || texts.failed);
+                const saved = data?.event ?? null;
+                if (saved) calendar.updateEvent(saved);
                 say("");
                 announce(
                     "event-change",
-                    { event: info.event, saved: true, error: "" },
+                    {
+                        event: info.event,
+                        saved: true,
+                        error: "",
+                        savedEvent: saved,
+                    },
                     false,
                 );
             } catch (error) {
