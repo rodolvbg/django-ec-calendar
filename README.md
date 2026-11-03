@@ -228,6 +228,9 @@ converted both ways).
   any that can't be, none is saved — the bar says which and why, and they
   wait still; else all are saved, in a transaction. **Discard** puts them
   back. Leaving the page with some asks first.
+- **Undo**: once saved, a move can be undone for ten seconds — a bar says
+  what moved ("Moved “Client call”.") with **Undo**, and Ctrl/Cmd+Z does the
+  same (unless one is typing). See [Undoing a move](#undoing-a-move).
 - **Your own way**: before it does any of that, the calendar fires
   `django-ec-calendar:move`, which can be cancelled; its `detail` has the
   `event`, the `mode`, and `save()`, `revert()` and `pend()` (keep it, as
@@ -246,6 +249,44 @@ For your own views, `prepare_calendar_move(request, move)` checks one
 saves it, as the calendar does.
 
 ![Two appointments moved, waiting: "2 changes not saved", Save, Discard](docs/screenshots/calendar-batch.png)
+
+### Undoing a move
+
+After a move is saved (`"save"`, `"confirm"`, or a `"batch"` saved together)
+a bar offers **Undo** for `calendar_undo_seconds` (10), and Ctrl/Cmd+Z does
+it too. Several moves can wait to be undone, the last one first; a batch is
+undone together.
+
+```python
+class BookingAdmin(CalendarAdminMixin, admin.ModelAdmin):
+    calendar_undo = True  # False: not offered
+    calendar_undo_seconds = 10  # how long a saved move can be undone
+```
+
+- **It's a move like any other**: the opposite one goes to the same place,
+  so it's checked (permissions, hours, the model's `clean()`), saved through
+  `save_model()` and logged as the first was. It undoes what the move did —
+  its dates and its resource — and nothing else.
+- **Not over somebody else's change**: it carries what the first move left
+  (`expect_start`, `expect_end`, `expect_resources`). If the event is
+  different now — someone moved or edited it meanwhile — it answers 409 ("It
+  was changed since, so this can't be undone."), nothing is overwritten and
+  the bar goes away. In a batch, none is undone if any changed.
+- **Only saved moves**: a move waiting in `"batch"` has **Discard**; one that
+  was refused or cancelled has nothing to undo. Reloading the page forgets
+  what could be undone.
+- `calendar_undo_seconds = 0`, or no moving (`"off"`), or no permission to
+  move: no bar. `get_calendar_undo_seconds(request)` says it for each user.
+
+After one is undone, `django-ec-calendar:event-change` (or `:batch-change`)
+fires with `undone: true`.
+
+For your own views, a move with `expect_start`/`expect_end`/`expect_resources`
+(as the event's `start`, `end` and `resourceIds` were) goes through
+`prepare_calendar_move()` and is refused with `CalendarMoveError` (status
+409) if the event is no longer so.
+
+![An appointment dragged to another professional: "Moved “María”.", Undo](docs/screenshots/calendar-undo.png)
 
 ### Business hours
 
@@ -304,6 +345,7 @@ Each option has a method that takes the request, as the admin's
 | `get_calendar_resources(request)`, `get_calendar_resource_empty_label(request)` | Its field's; "No …". |
 | `get_calendar_resource_editable(request)` | `calendar_resource_editable`. |
 | `get_calendar_move_mode(request)` | `calendar_move_mode`. |
+| `get_calendar_undo_seconds(request)` | `calendar_undo`, `calendar_undo_seconds` (0: none). |
 | `get_calendar_date_picker(request)` | `calendar_date_picker`. |
 | `get_calendar_url_params(request)`, `get_calendar_url_views(request)`, `get_calendar_return_param(request)` | `calendar_url_params`, `calendar_url_views`, `calendar_return_param`. |
 | `get_calendar_filters(request)`, `get_calendar_url_state(request)`, `get_calendar_highlight_today(request)` | Their attributes. |
@@ -456,8 +498,8 @@ which bubbles and can be cancelled — `preventDefault()`, and it isn't done
 | `django-ec-calendar:date-click` | `start`, `allDay`, `resource`, `jsEvent` | Opens the add page. |
 | `django-ec-calendar:select` | `start`, `end`, `allDay`, `resource`, `jsEvent` | Opens the add page. |
 | `django-ec-calendar:move` | `event`, `mode`, `save()`, `revert()`, `pend()` | As its mode says (see [Dragging](#dragging)). |
-| `django-ec-calendar:event-change` | `event`, `saved`, `error`, `savedEvent` (the server's, which the event now is) | (After a move; not cancellable.) |
-| `django-ec-calendar:batch-change` | `saved`, `events`, `errors` | (After several saved together; not cancellable.) |
+| `django-ec-calendar:event-change` | `event`, `saved`, `error`, `savedEvent` (the server's, which the event now is), `undone` (only when it undoes a move) | (After a move, or undoing one; not cancellable.) |
+| `django-ec-calendar:batch-change` | `saved`, `events`, `errors`, `undone` (only when it undoes a batch) | (After several saved together, or undoing them; not cancellable.) |
 
 ```js
 document.addEventListener("django-ec-calendar:event-click", (event) => {

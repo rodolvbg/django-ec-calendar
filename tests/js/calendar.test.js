@@ -1493,3 +1493,486 @@ describe("an add page with a query of its own", () => {
         );
     });
 });
+
+describe("undoing a saved move", () => {
+    const UNDO = {
+        ...CONFIG,
+        moveMode: "save",
+        undoSeconds: 10,
+        texts: {
+            ...TEXTS,
+            undo: "Undo",
+            moved: "Moved “%(title)s”.",
+            movedMany: {
+                one: "%(count)s event moved.",
+                other: "%(count)s events moved.",
+            },
+        },
+    };
+    const SERVER = {
+        id: "7",
+        title: "Event 7",
+        start: "2026-10-29T15:00:00",
+        end: "2026-10-29T16:00:00",
+        allDay: false,
+    };
+    const BACK = {
+        ...SERVER,
+        start: "2026-10-29T09:00:00",
+        end: "2026-10-29T10:00:00",
+    };
+
+    const drop = (id = "7", extra = {}) => ({
+        event: {
+            id,
+            title: `Event ${id}`,
+            start: new Date("2026-10-29T15:00:00"),
+            end: new Date("2026-10-29T16:00:00"),
+            allDay: false,
+        },
+        oldEvent: {
+            start: new Date("2026-10-29T09:00:00"),
+            end: new Date("2026-10-29T10:00:00"),
+            allDay: false,
+        },
+        revert: vi.fn(),
+        ...extra,
+    });
+
+    const ok = (event) => ({ ok: true, json: async () => ({ event }) });
+    const bar = () => element().querySelector(".django-ec-calendar-undo");
+    const button = () =>
+        element().querySelector(".django-ec-calendar-undo-button");
+
+    async function start(responses, config = UNDO) {
+        const fetch = vi.fn();
+        for (const response of responses) fetch.mockResolvedValueOnce(response);
+        vi.stubGlobal("fetch", fetch);
+        page(config);
+        await load();
+        const calendar = created.at(-1);
+        calendar.updateEvent = vi.fn();
+        calendar.refetchEvents = vi.fn();
+        calendar.getEventById = vi.fn((id) => ({ id }));
+        const heard = [];
+        for (const name of ["event-change", "batch-change"]) {
+            element().addEventListener(`django-ec-calendar:${name}`, (e) =>
+                heard.push(e.detail),
+            );
+        }
+        return { fetch, calendar, heard };
+    }
+
+    afterEach(() => vi.useRealTimers());
+
+    it("isn't offered unless it's on", async () => {
+        await start([ok(SERVER)], { ...UNDO, undoSeconds: 0 });
+        await options().eventDrop(drop());
+        expect(bar()).toBeNull();
+    });
+
+    it("says what moved, and offers to undo it", async () => {
+        await start([ok(SERVER)]);
+        expect(bar().hidden).toBe(true);
+        await options().eventDrop(drop());
+        expect(bar().hidden).toBe(false);
+        expect(bar().getAttribute("role")).toBe("status");
+        expect(bar().textContent).toContain("Moved “Event 7”.");
+        expect(button().textContent).toBe("Undo");
+    });
+
+    it("isn't offered when the calendar doesn't say where it was", async () => {
+        await start([ok(SERVER)]);
+        await options().eventDrop(drop("7", { oldEvent: undefined }));
+        expect(bar().hidden).toBe(true);
+    });
+
+    it("isn't offered for a move that failed", async () => {
+        await start([{ ok: false, json: async () => ({ error: "No." }) }]);
+        const info = drop();
+        await options().eventDrop(info);
+        expect(info.revert).toHaveBeenCalled();
+        expect(bar().hidden).toBe(true);
+    });
+
+    it("sends the opposite move, with what the first left", async () => {
+        const { fetch, calendar, heard } = await start([ok(SERVER), ok(BACK)]);
+        await options().eventDrop(drop());
+        button().click();
+        await vi.waitFor(() => expect(heard).toHaveLength(2));
+        const [url, init] = fetch.mock.calls[1];
+        expect(url).toBe(CONFIG.move);
+        expect(init.method).toBe("POST");
+        expect(init.headers["X-CSRFToken"]).toBe("token");
+        expect(Object.fromEntries(new URLSearchParams(init.body))).toEqual({
+            pk: "7",
+            start: "2026-10-29T09:00:00",
+            end: "2026-10-29T10:00:00",
+            expect_start: "2026-10-29T15:00:00",
+            expect_end: "2026-10-29T16:00:00",
+        });
+        expect(calendar.updateEvent).toHaveBeenLastCalledWith(BACK);
+        expect(heard[1]).toEqual({
+            event: { id: "7" },
+            saved: true,
+            error: "",
+            savedEvent: BACK,
+            undone: true,
+        });
+        expect(bar().hidden).toBe(true);
+        expect(status().hidden).toBe(true);
+    });
+
+    it("doesn't undo what it can't check when the server sent no event", async () => {
+        const { fetch } = await start([{ ok: true }, ok(BACK)]);
+        await options().eventDrop(drop());
+        button().click();
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+        const body = Object.fromEntries(
+            new URLSearchParams(fetch.mock.calls[1][1].body),
+        );
+        expect(Object.keys(body)).toEqual(["pk", "start", "end"]);
+    });
+
+    it("an all-day event goes back to its days", async () => {
+        const { fetch } = await start([ok(SERVER), ok(BACK)]);
+        await options().eventDrop({
+            event: {
+                id: "7",
+                title: "Trip",
+                start: new Date("2026-11-03T00:00:00"),
+                end: null,
+                allDay: true,
+            },
+            oldEvent: {
+                start: new Date("2026-11-02T00:00:00"),
+                end: null,
+                allDay: true,
+            },
+            revert: vi.fn(),
+        });
+        button().click();
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+        expect(
+            new URLSearchParams(fetch.mock.calls[1][1].body).get("start"),
+        ).toBe("2026-11-02");
+        expect(
+            new URLSearchParams(fetch.mock.calls[1][1].body).get("end"),
+        ).toBe("");
+    });
+
+    it("is offered for ten seconds, then not", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        await start([ok(SERVER)]);
+        await options().eventDrop(drop());
+        vi.advanceTimersByTime(9_999);
+        expect(bar().hidden).toBe(false);
+        vi.advanceTimersByTime(1);
+        expect(bar().hidden).toBe(true);
+    });
+
+    it("the last one first, then the one before", async () => {
+        const { fetch } = await start([
+            ok(SERVER),
+            ok({ ...SERVER, id: "8" }),
+            ok(BACK),
+            ok(BACK),
+        ]);
+        await options().eventDrop(drop("7"));
+        await options().eventDrop(drop("8"));
+        expect(bar().textContent).toContain("Event 8");
+        button().click();
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+        expect(new URLSearchParams(fetch.mock.calls[2][1].body).get("pk")).toBe(
+            "8",
+        );
+        expect(bar().textContent).toContain("Event 7");
+        button().click();
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
+        expect(new URLSearchParams(fetch.mock.calls[3][1].body).get("pk")).toBe(
+            "7",
+        );
+        expect(bar().hidden).toBe(true);
+    });
+
+    it("what changed since says so, and isn't offered again", async () => {
+        const { fetch, calendar } = await start([
+            ok(SERVER),
+            {
+                ok: false,
+                status: 409,
+                json: async () => ({ error: "It was changed since." }),
+            },
+        ]);
+        await options().eventDrop(drop());
+        const before = calendar.updateEvent.mock.calls.length;
+        button().click();
+        await vi.waitFor(() =>
+            expect(status().textContent).toBe("It was changed since."),
+        );
+        expect(status().hidden).toBe(false);
+        expect(bar().hidden).toBe(true);
+        expect(calendar.updateEvent.mock.calls.length).toBe(before);
+        button().click(); // Nothing left to undo.
+        expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("says it wasn't saved when the request fails", async () => {
+        const fetch = vi
+            .fn()
+            .mockResolvedValueOnce(ok(SERVER))
+            .mockRejectedValueOnce(new Error(""));
+        vi.stubGlobal("fetch", fetch);
+        page(UNDO);
+        await load();
+        created.at(-1).updateEvent = vi.fn();
+        await options().eventDrop(drop());
+        button().click();
+        await vi.waitFor(() => expect(status().textContent).toBe("Not saved"));
+    });
+
+    describe("with resources", () => {
+        const RESOURCES = {
+            ...UNDO,
+            resource: {
+                param: "p",
+                empty: "__none__",
+                editable: true,
+                message: "",
+            },
+        };
+
+        it("goes back to the one it was in", async () => {
+            const { fetch } = await start(
+                [ok({ ...SERVER, resourceIds: ["2"] }), ok(BACK)],
+                RESOURCES,
+            );
+            await options().eventDrop(
+                drop("7", {
+                    oldResource: { id: "1" },
+                    newResource: { id: "2" },
+                }),
+            );
+            button().click();
+            await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+            expect(
+                Object.fromEntries(
+                    new URLSearchParams(fetch.mock.calls[1][1].body),
+                ),
+            ).toMatchObject({
+                resource: "1",
+                resource_from: "2",
+                expect_resources: "2",
+            });
+        });
+
+        it("a move inside the same one has no resource to put back", async () => {
+            const { fetch } = await start([ok(SERVER), ok(BACK)], RESOURCES);
+            await options().eventDrop(drop());
+            button().click();
+            await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+            const body = new URLSearchParams(fetch.mock.calls[1][1].body);
+            expect(body.has("resource")).toBe(false);
+        });
+    });
+
+    describe("Ctrl/Cmd+Z", () => {
+        const press = (init, target = document.body) =>
+            target.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                    key: "z",
+                    bubbles: true,
+                    cancelable: true,
+                    ...init,
+                }),
+            );
+
+        it("undoes the last one", async () => {
+            const { fetch } = await start([ok(SERVER), ok(BACK)]);
+            await options().eventDrop(drop());
+            const event = press({ ctrlKey: true });
+            expect(event).toBe(false); // Its default was prevented.
+            await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+            await vi.waitFor(() => expect(bar().hidden).toBe(true));
+        });
+
+        it("Cmd+Z too", async () => {
+            const { fetch } = await start([ok(SERVER), ok(BACK)]);
+            await options().eventDrop(drop());
+            press({ metaKey: true });
+            await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+        });
+
+        it.each([
+            ["Shift (redo)", { ctrlKey: true, shiftKey: true }],
+            ["Alt", { ctrlKey: true, altKey: true }],
+            ["without Ctrl", {}],
+        ])("not with %s", async (_name, init) => {
+            const { fetch } = await start([ok(SERVER), ok(BACK)]);
+            await options().eventDrop(drop());
+            press(init);
+            expect(fetch).toHaveBeenCalledTimes(1);
+        });
+
+        it("not while typing", async () => {
+            const { fetch } = await start([ok(SERVER), ok(BACK)]);
+            await options().eventDrop(drop());
+            const input = document.createElement("input");
+            document.body.append(input);
+            press({ ctrlKey: true }, input);
+            expect(fetch).toHaveBeenCalledTimes(1);
+            expect(bar().hidden).toBe(false);
+        });
+
+        it("not when there is nothing to undo", async () => {
+            const { fetch } = await start([ok(SERVER)]);
+            press({ ctrlKey: true });
+            expect(fetch).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("a batch", () => {
+        const BATCH = {
+            ...UNDO,
+            moveMode: "batch",
+            moves: "/admin/agenda/appointment/calendar/moves/",
+            texts: {
+                ...UNDO.texts,
+                save: "Save",
+                discard: "Discard",
+                pending: {
+                    one: "%(count)s not saved",
+                    other: "%(count)s not saved",
+                },
+            },
+        };
+        const saveAll = () =>
+            element().querySelector(".django-ec-calendar-save");
+
+        it("is undone together", async () => {
+            const { fetch, calendar, heard } = await start(
+                [
+                    {
+                        ok: true,
+                        json: async () => ({
+                            events: [SERVER, { ...SERVER, id: "8" }],
+                        }),
+                    },
+                    {
+                        ok: true,
+                        json: async () => ({
+                            events: [BACK, { ...BACK, id: "8" }],
+                        }),
+                    },
+                ],
+                BATCH,
+            );
+            await options().eventDrop(drop("7"));
+            await options().eventDrop(drop("8"));
+            expect(bar().hidden).toBe(true); // Nothing is saved yet.
+            saveAll().click();
+            await vi.waitFor(() => expect(bar().hidden).toBe(false));
+            expect(bar().textContent).toContain("2 events moved.");
+            button().click();
+            await vi.waitFor(() => expect(heard.at(-1)?.undone).toBe(true));
+            const [url, init] = fetch.mock.calls[1];
+            expect(url).toBe(BATCH.moves);
+            expect(init.headers["Content-Type"]).toBe("application/json");
+            expect(JSON.parse(init.body).moves).toEqual([
+                {
+                    pk: "7",
+                    start: "2026-10-29T09:00:00",
+                    end: "2026-10-29T10:00:00",
+                    expect_start: "2026-10-29T15:00:00",
+                    expect_end: "2026-10-29T16:00:00",
+                },
+                {
+                    pk: "8",
+                    start: "2026-10-29T09:00:00",
+                    end: "2026-10-29T10:00:00",
+                    expect_start: "2026-10-29T15:00:00",
+                    expect_end: "2026-10-29T16:00:00",
+                },
+            ]);
+            expect(heard.at(-1)).toEqual({
+                saved: true,
+                events: [BACK, { ...BACK, id: "8" }],
+                errors: {},
+                undone: true,
+            });
+            expect(calendar.refetchEvents).toHaveBeenCalledTimes(2);
+        });
+
+        it("one moved twice goes back to before both", async () => {
+            const { fetch } = await start(
+                [
+                    { ok: true, json: async () => ({ events: [SERVER] }) },
+                    { ok: true, json: async () => ({ events: [BACK] }) },
+                ],
+                BATCH,
+            );
+            const first = drop("7");
+            await options().eventDrop(first);
+            await options().eventDrop(
+                drop("7", {
+                    event: first.event,
+                    oldEvent: {
+                        start: new Date("2026-10-29T15:00:00"),
+                        end: new Date("2026-10-29T16:00:00"),
+                        allDay: false,
+                    },
+                }),
+            );
+            saveAll().click();
+            await vi.waitFor(() => expect(bar().hidden).toBe(false));
+            expect(bar().textContent).toContain("1 event moved.");
+            button().click();
+            await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+            expect(JSON.parse(fetch.mock.calls[1][1].body).moves[0].start).toBe(
+                "2026-10-29T09:00:00",
+            );
+        });
+
+        it("what changed since: none is undone, and it says which", async () => {
+            const { fetch } = await start(
+                [
+                    { ok: true, json: async () => ({ events: [SERVER] }) },
+                    {
+                        ok: false,
+                        json: async () => ({
+                            errors: { 7: "It was changed since." },
+                        }),
+                    },
+                ],
+                BATCH,
+            );
+            await options().eventDrop(drop("7"));
+            saveAll().click();
+            await vi.waitFor(() => expect(bar().hidden).toBe(false));
+            button().click();
+            await vi.waitFor(() =>
+                expect(status().textContent).toBe("It was changed since."),
+            );
+            expect(fetch).toHaveBeenCalledTimes(2);
+            expect(bar().hidden).toBe(true);
+        });
+
+        it("not offered when one didn't say where it was", async () => {
+            await start(
+                [{ ok: true, json: async () => ({ events: [SERVER] }) }],
+                BATCH,
+            );
+            await options().eventDrop(drop("7", { oldEvent: undefined }));
+            saveAll().click();
+            await vi.waitFor(() => expect(status().hidden).toBe(true));
+            expect(bar().hidden).toBe(true);
+        });
+
+        it("discarded ones leave nothing to undo", async () => {
+            await start([], BATCH);
+            await options().eventDrop(drop("7"));
+            element().querySelector(".django-ec-calendar-discard").click();
+            expect(bar().hidden).toBe(true);
+        });
+    });
+});

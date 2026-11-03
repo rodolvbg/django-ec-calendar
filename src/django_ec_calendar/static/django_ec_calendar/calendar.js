@@ -24,6 +24,11 @@
  * error, savedEvent: the server's}); after several saved together, `django-ec-calendar:batch-change`
  * ({saved, events, errors}).
  *
+ * A move that was saved can be undone for `config.undoSeconds` (a bar with
+ * "Undo" and Ctrl/Cmd+Z; 0: not offered): the opposite move, sent to the same
+ * place, with what the saved one left (`expect_*`), so that one changed since
+ * isn't overwritten. Undone, `event-change` (or `batch-change`) has `undone`.
+ *
  * With resources (`config.resources`), dropping an event in another one
  * changes it too (`config.resource.editable`), and adding sends it. With
  * `config.urlState`, the view and its date are in the page's URL (`ec-view`,
@@ -68,6 +73,9 @@
             .find((part) => part.startsWith(`${name}=`));
         return found ? decodeURIComponent(found.slice(name.length + 1)) : "";
     }
+
+    /** The calendar whose last saved move Ctrl/Cmd+Z undoes (null: none). */
+    let undoOwner = null;
 
     // The page's theme ------------------------------------------------------
 
@@ -280,6 +288,48 @@
             return move;
         }
 
+        /** Where an event was before a drag, as the server reads it (null:
+         * the calendar didn't say: nothing to go back to). */
+        function origin(info) {
+            const old = info.oldEvent;
+            if (!old) return null;
+            const dates = old.allDay || options.datesOnly;
+            const before = {
+                start: moment(old.start, dates),
+                end: old.end ? moment(old.end, dates) : "",
+            };
+            if (info.oldResource && info.newResource !== undefined) {
+                before.resource = String(info.oldResource.id);
+            }
+            return before;
+        }
+
+        /** The move that puts an event back (`before`), from where `moved`
+         * left it; with what the server saved (`saved`), to refuse it if it
+         * changed since. */
+        function reverse(before, moved, saved) {
+            const move = {
+                pk: moved.pk,
+                start: before.start,
+                end: before.end,
+            };
+            if (before.resource !== undefined && moved.resource !== undefined) {
+                move.resource = before.resource;
+                move.resource_from = moved.resource;
+            }
+            if (saved) {
+                move.expect_start = saved.start;
+                move.expect_end = saved.end ?? "";
+                if (saved.resourceIds) {
+                    move.expect_resources = saved.resourceIds
+                        .map(String)
+                        .sort()
+                        .join(",");
+                }
+            }
+            return move;
+        }
+
         const headers = (json) => ({
             Accept: "application/json",
             "X-CSRFToken": options.csrfToken || cookie("csrftoken"),
@@ -305,6 +355,7 @@
                 const saved = data?.event ?? null;
                 if (saved) calendar.updateEvent(saved);
                 say("");
+                rememberMove(info, saved);
                 announce(
                     "event-change",
                     {
@@ -353,10 +404,157 @@
             );
         }
 
+        // Saved moves that can still be undone (the last one on top), each
+        // for `undoSeconds`.
+        const undoSeconds = options.undoSeconds ?? 0;
+        const undoable = [];
+        const origins = new Map(); // A pending move's: where it was before.
+        const undoBar = document.createElement("div");
+        undoBar.className = "django-ec-calendar-undo";
+        undoBar.setAttribute("role", "status");
+        undoBar.hidden = true;
+        const undoLabel = document.createElement("span");
+        const undoButton = node(
+            "button",
+            "django-ec-calendar-undo-button button",
+            texts.undo ?? "",
+        );
+        undoButton.type = "button";
+        undoBar.append(undoLabel, undoButton);
+        if (undoSeconds > 0) element.insertBefore(undoBar, target);
+        const owner = {
+            undo: () => undoLast(),
+            // One taken out of the page (a single-page app) can't be undone.
+            available: () => undoable.length > 0 && element.isConnected,
+        };
+
+        function showUndo() {
+            const top = undoable.at(-1);
+            undoBar.hidden = !top;
+            undoLabel.textContent = top?.label ?? "";
+        }
+
+        function forget(entry) {
+            clearTimeout(entry.timer);
+            const at = undoable.indexOf(entry);
+            if (at >= 0) undoable.splice(at, 1);
+            if (!undoable.length && undoOwner === owner) undoOwner = null;
+            showUndo();
+        }
+
+        function remember(entry) {
+            if (undoSeconds <= 0) return;
+            entry.timer = setTimeout(() => forget(entry), undoSeconds * 1000);
+            undoable.push(entry);
+            undoOwner = owner;
+            showUndo();
+        }
+
+        /** Put events back: one move (saved at once), or several (a batch). */
+        async function runUndo(moves, batch) {
+            say(texts.saving);
+            try {
+                const response = await fetch(
+                    batch ? options.moves : options.move,
+                    {
+                        method: "POST",
+                        headers: headers(batch),
+                        body: batch
+                            ? JSON.stringify({ moves })
+                            : new URLSearchParams(moves[0]),
+                        credentials: "same-origin",
+                    },
+                );
+                const data = await Promise.resolve()
+                    .then(() => response.json())
+                    .catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(
+                        Object.values(data?.errors ?? {}).join(" ") ||
+                            data?.error ||
+                            texts.failed,
+                    );
+                }
+                say("");
+                if (batch) {
+                    calendar.refetchEvents();
+                    announce(
+                        "batch-change",
+                        {
+                            saved: true,
+                            events: data.events ?? [],
+                            errors: {},
+                            undone: true,
+                        },
+                        false,
+                    );
+                    return;
+                }
+                const saved = data?.event ?? null;
+                if (saved) calendar.updateEvent(saved);
+                announce(
+                    "event-change",
+                    {
+                        event: calendar.getEventById?.(moves[0].pk) ?? null,
+                        saved: true,
+                        error: "",
+                        savedEvent: saved,
+                        undone: true,
+                    },
+                    false,
+                );
+            } catch (error) {
+                say(error.message || texts.failed);
+            }
+        }
+
+        async function undoLast() {
+            const entry = undoable.at(-1);
+            if (!entry) return;
+            forget(entry);
+            await entry.run();
+        }
+
+        undoButton.addEventListener("click", undoLast);
+
+        /** A move saved at once: offer to undo it. */
+        function rememberMove(info, saved) {
+            const before = undoSeconds > 0 ? origin(info) : null;
+            if (!before) return;
+            const move = reverse(before, payload(info), saved);
+            remember({
+                label: texts.moved.replace("%(title)s", info.event.title),
+                run: () => runUndo([move], false),
+            });
+        }
+
+        /** Several saved together: offer to undo them together (if each
+         * knows where it was). */
+        function rememberBatch(moves, saved) {
+            if (undoSeconds <= 0) return;
+            const back = moves.map((moved) => {
+                const before = origins.get(moved.pk);
+                return before
+                    ? reverse(before, moved, saved.get(String(moved.pk)))
+                    : null;
+            });
+            if (!back.every(Boolean)) return;
+            const words =
+                texts.movedMany?.[plural.select(back.length)] ??
+                texts.movedMany?.other ??
+                "%(count)s";
+            remember({
+                label: words.replace("%(count)s", String(back.length)),
+                run: () => runUndo(back, true),
+            });
+        }
+
         /** Keep a move, to save it with the others. */
         function pend(info) {
             if (!options.moves) return send(info);
             const move = payload(info);
+            // Where it was before all of them.
+            if (!origins.has(move.pk)) origins.set(move.pk, origin(info));
             const before = pending.get(move.pk);
             if (before?.resource !== undefined) {
                 // From where it was before all of them.
@@ -397,6 +595,11 @@
                     );
                     return;
                 }
+                rememberBatch(
+                    moves,
+                    new Map((data.events ?? []).map((e) => [String(e.id), e])),
+                );
+                origins.clear();
                 pending.clear();
                 showPending();
                 say("");
@@ -412,6 +615,7 @@
         });
 
         discard.addEventListener("click", () => {
+            origins.clear();
             pending.clear();
             showPending();
             say("");
@@ -689,6 +893,24 @@
 
     /** A moved event waiting to be saved ("batch"). */
     const PENDING = "django-ec-calendar-pending-event";
+
+    // Ctrl/Cmd+Z undoes the last saved move, unless one is typing.
+    document.addEventListener("keydown", (event) => {
+        if (
+            !undoOwner?.available() ||
+            event.key?.toLowerCase() !== "z" ||
+            !(event.ctrlKey || event.metaKey) ||
+            event.shiftKey ||
+            event.altKey ||
+            event.target?.closest?.(
+                "input, textarea, select, [contenteditable]",
+            )
+        ) {
+            return;
+        }
+        event.preventDefault();
+        undoOwner.undo();
+    });
 
     document.addEventListener(
         "click",

@@ -93,6 +93,14 @@ def calendar_texts() -> dict[str, Any]:
                 "%(count)s change not saved", "%(count)s changes not saved", 2
             ),
         },
+        "undo": gettext("Undo"),
+        # %(title)s: the event's.
+        "moved": gettext("Moved “%(title)s”."),
+        # How many events a saved batch moved (to undo it).
+        "movedMany": {
+            "one": ngettext("%(count)s event moved.", "%(count)s events moved.", 1),
+            "other": ngettext("%(count)s event moved.", "%(count)s events moved.", 2),
+        },
         "failed": gettext("Not saved"),
         # %(title)s: the event's.
         "confirmMove": gettext("Save the new dates of “%(title)s”?"),
@@ -130,6 +138,7 @@ def calendar_config(
     move: str | None = None,
     moves: str | None = None,
     move_mode: str = "off",
+    undo_seconds: int = 0,
     dates_only: bool = False,
     resources: Sequence[Mapping[str, Any]] | Mapping[str, Any] | None = None,
     resource: Mapping[str, Any] | None = None,
@@ -156,7 +165,8 @@ def calendar_config(
     ``highlight_today``: whether today is tinted (never in a day's view).
     ``date_picker``: whether its toolbar has a date field, to go to one.
     ``move_mode``: how a drag goes (``"off"``, ``"save"``, ``"confirm"``,
-    ``"batch"``: kept, and saved together at ``moves``). ``outside_hours``: out of the
+    ``"batch"``: kept, and saved together at ``moves``). ``undo_seconds``: how
+    long a saved move can be undone (0: not at all). ``outside_hours``: out of the
     business hours (its background events), ``"shade"`` or ``"block"`` (not
     to be selected, nor moved to). ``return_param``: the
     parameter that takes the calendar's URL to the pages it opens (to come
@@ -181,6 +191,7 @@ def calendar_config(
         "datePicker": date_picker,
         "moves": moves,
         "moveMode": move_mode,
+        "undoSeconds": undo_seconds,
         "outsideHours": outside_hours,
         "returnParam": return_param,
         "locale": language,

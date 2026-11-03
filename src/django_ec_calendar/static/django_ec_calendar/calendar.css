@@ -102,8 +102,10 @@
 }
 
 /* Moves waiting to be saved together (calendar_move_mode "batch"): how
-   many, and saving or discarding them; and each, dashed. */
-.django-ec-calendar-pending {
+   many, and saving or discarding them; and each, dashed. A move saved, to
+   undo (calendar_undo), looks the same. */
+.django-ec-calendar-pending,
+.django-ec-calendar-undo {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -118,11 +120,13 @@
     );
 }
 
-.django-ec-calendar-pending[hidden] {
+.django-ec-calendar-pending[hidden],
+.django-ec-calendar-undo[hidden] {
     display: none;
 }
 
-.django-ec-calendar-pending > span {
+.django-ec-calendar-pending > span,
+.django-ec-calendar-undo > span {
     margin-inline-end: auto;
 }
 

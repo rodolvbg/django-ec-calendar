@@ -152,6 +152,73 @@ class TestBookings(_AdminE2ETestCase):
         # Wednesday (Sunday is the first column).
         assert self.day(3)["x"] <= event.bounding_box()["x"] < self.day(4)["x"]
 
+    def drag_call_later(self):
+        """Drag "Client call" two hours later, a day after (it asks first:
+        yes, from the base class)."""
+        page = self.page
+        event = page.locator(".ec-event", has_text="Client call")
+        box = event.bounding_box()
+        assert box is not None
+        hour = self.slot("9:00 AM")["y"] - self.slot("8:00 AM")["y"]
+        start = (box["x"] + box["width"] / 2, box["y"] + 5)
+        page.mouse.move(*start)
+        page.mouse.down()
+        page.mouse.move(start[0] + self.day(1)["width"], start[1] + 2 * hour, steps=15)
+        page.mouse.up()
+        expect(event).to_contain_text("12:00")
+        return event
+
+    def test_undoes_a_move_with_its_button(self):
+        call = self.book("Client call", 1, 10, 11)
+        self.login()
+        self.open_calendar()
+        event = self.drag_call_later()
+        bar = self.page.locator(".django-ec-calendar-undo")
+        expect(bar).to_be_visible()
+        expect(bar).to_contain_text("Moved “Client call”.")
+        bar.get_by_role("button", name="Undo").click()
+        expect(event).to_contain_text("10:00")
+        expect(bar).to_be_hidden()
+        expect(self.page.locator(".django-ec-calendar-status")).to_be_hidden()
+        self.page.wait_for_timeout(300)
+        call.refresh_from_db()
+        assert (call.start, call.end) == (self.at(1, 10), self.at(1, 11))
+        # Wednesday's column is empty again: it's back on Tuesday's.
+        assert self.day(2)["x"] <= event.bounding_box()["x"] < self.day(3)["x"]
+
+    def test_undoes_a_move_with_ctrl_z(self):
+        call = self.book("Client call", 1, 10, 11)
+        self.login()
+        self.open_calendar()
+        event = self.drag_call_later()
+        # Saved first: there's nothing to undo while it's still being sent.
+        expect(self.page.locator(".django-ec-calendar-undo")).to_be_visible()
+        self.page.keyboard.press("Control+z")
+        expect(event).to_contain_text("10:00")
+        expect(self.page.locator(".django-ec-calendar-undo")).to_be_hidden()
+        self.page.wait_for_timeout(300)
+        call.refresh_from_db()
+        assert (call.start, call.end) == (self.at(1, 10), self.at(1, 11))
+
+    def test_a_move_changed_since_is_not_undone(self):
+        call = self.book("Client call", 1, 10, 11)
+        self.login()
+        self.open_calendar()
+        self.drag_call_later()
+        self.page.wait_for_timeout(300)
+        # Someone else moves it again, meanwhile.
+        type(call).objects.filter(pk=call.pk).update(
+            start=self.at(4, 15), end=self.at(4, 16)
+        )
+        self.page.locator(".django-ec-calendar-undo").get_by_role(
+            "button", name="Undo"
+        ).click()
+        status = self.page.locator(".django-ec-calendar-status")
+        expect(status).to_contain_text("It was changed since")
+        expect(self.page.locator(".django-ec-calendar-undo")).to_be_hidden()
+        call.refresh_from_db()
+        assert (call.start, call.end) == (self.at(4, 15), self.at(4, 16))
+
     def test_resizes_one_and_saves_it(self):
         call = self.book("Client call", 1, 10, 11)
         self.login()
@@ -407,6 +474,20 @@ class TestAppointments(_AdminE2ETestCase):
         luis = self.column("Luis")
         assert event and luis["x"] <= event["x"] < luis["x"] + luis["width"]
 
+    def test_undone_to_the_professional_it_came_from(self):
+        self.open()
+        self.drag_to("Luis")
+        bar = self.page.locator(".django-ec-calendar-undo")
+        expect(bar).to_be_visible()
+        bar.get_by_role("button", name="Undo").click()
+        expect(bar).to_be_hidden()
+        self.page.wait_for_timeout(400)
+        self.maria.refresh_from_db()
+        assert self.maria.professional == self.ana
+        event = self.page.locator(".ec-event", has_text="María").bounding_box()
+        ana = self.column("Ana")
+        assert event and ana["x"] <= event["x"] < ana["x"] + ana["width"]
+
     def test_a_move_one_says_no_to_goes_back(self):
         self.answer = False
         self.open()
@@ -480,6 +561,7 @@ class TestHours(TestAppointments):
     test_back_where_it_was_after_a_save = None
     test_its_filters_keep_its_place = None
     test_dragged_to_another_professional = None
+    test_undone_to_the_professional_it_came_from = None
 
 
 class TestBatch(TestAppointments):
@@ -529,6 +611,24 @@ class TestBatch(TestAppointments):
             self.luis,
         )
 
+    def test_undone_together(self):
+        self.open()
+        page = self.page
+        self.drag("María", "Luis")
+        self.drag("Lucía", "Luis")
+        page.locator(".django-ec-calendar-pending button", has_text="Save").click()
+        bar = page.locator(".django-ec-calendar-undo")
+        expect(bar).to_contain_text("2 events moved.")
+        bar.get_by_role("button", name="Undo").click()
+        expect(bar).to_be_hidden()
+        page.wait_for_timeout(400)
+        self.maria.refresh_from_db()
+        self.lucia.refresh_from_db()
+        assert (self.maria.professional, self.lucia.professional) == (
+            self.ana,
+            self.ana,
+        )
+
     def test_discarded(self):
         self.open()
         page = self.page
@@ -568,6 +668,7 @@ class TestBatch(TestAppointments):
 
     # Its other tests ask first.
     test_dragged_to_another_professional = None
+    test_undone_to_the_professional_it_came_from = None
     test_a_move_one_says_no_to_goes_back = None
     test_its_details_and_no_tint_in_a_day = None
     test_back_where_it_was_after_a_save = None
@@ -631,6 +732,7 @@ class TestInline(TestAppointments):
     test_back_where_it_was_after_a_save = None
     test_its_filters_keep_its_place = None
     test_dragged_to_another_professional = None
+    test_undone_to_the_professional_it_came_from = None
 
 
 class TestPage(_AdminE2ETestCase):

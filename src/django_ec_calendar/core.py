@@ -80,6 +80,12 @@ class CalendarMixin(CalendarSource):
     #: ``"confirm"`` (asked first) or ``"batch"`` (kept, until several are
     #: saved together, or discarded).
     calendar_move_mode = "off"
+    #: Whether a move that was saved can be undone, for ``calendar_undo_seconds``
+    #: after it (a bar with "Undo", and Ctrl/Cmd+Z): the opposite move, sent
+    #: and checked as any other, and refused if the event changed since.
+    calendar_undo = True
+    #: How long, in seconds, a saved move can be undone.
+    calendar_undo_seconds = 10
     #: Whether dragging an event to another resource changes its resource.
     calendar_resource_editable = True
     #: Whether selecting dates opens the add page with them.
@@ -123,6 +129,13 @@ class CalendarMixin(CalendarSource):
                 f"{', '.join(MOVE_MODES)}, not {mode!r}."
             )
         return mode
+
+    def get_calendar_undo_seconds(self, request: HttpRequest) -> int:
+        """How long a saved move can be undone, for this request
+        (``calendar_undo`` and ``calendar_undo_seconds``); 0: not at all."""
+        if not self.calendar_undo:
+            return 0
+        return max(0, int(self.calendar_undo_seconds))
 
     def get_calendar_resource_editable(self, request: HttpRequest) -> bool:
         """Whether a move may change an event's resource
@@ -278,6 +291,7 @@ class CalendarMixin(CalendarSource):
             move=move,
             moves=moves,
             move_mode=mode if movable else "off",
+            undo_seconds=self.get_calendar_undo_seconds(request) if movable else 0,
             dates_only=self.dates_only,
             resources=resources,
             resource=resource,
@@ -325,6 +339,10 @@ class CalendarMixin(CalendarSource):
             raise CalendarMoveError(gettext("It doesn't exist any more."), 404)
         if not self.has_calendar_move_permission(request, obj):
             raise CalendarMoveError(gettext("You may not move it."), 403)
+        if self._changed_since(request, obj, move):
+            raise CalendarMoveError(
+                gettext("It was changed since, so this can't be undone."), 409
+            )
         values = self.moved_values(move.get("start"), move.get("end"))
         if values is None:
             raise CalendarMoveError(gettext("Not a date."))
@@ -368,6 +386,25 @@ class CalendarMixin(CalendarSource):
         except ValidationError as error:
             raise CalendarMoveError(" ".join(error.messages)) from error
         return prepared
+
+    def _changed_since(
+        self, request: HttpRequest, obj: Model, move: dict[str, Any]
+    ) -> bool:
+        """Whether ``obj`` is no longer as a move says it should be
+        (``expect_start``, ``expect_end`` and ``expect_resources``: what the
+        move it undoes left): someone changed it since. Without any of
+        them, never."""
+        if not any(name.startswith("expect_") for name in move):
+            return False
+        event = self.get_calendar_event(request, obj)
+        current = {
+            "expect_start": event.get("start") or "",
+            "expect_end": event.get("end") or "",
+            "expect_resources": ",".join(
+                sorted(str(item) for item in event.get("resourceIds", []))
+            ),
+        }
+        return any(str(move[name]) != current[name] for name in current if name in move)
 
     def save_calendar_object(
         self, request: HttpRequest, obj: Model, names: list[str]

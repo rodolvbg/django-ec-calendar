@@ -73,6 +73,23 @@ msgid "Saving…"
 msgstr "Guardando…"
 
 #: config.py
+msgid "Undo"
+msgstr "Deshacer"
+
+#: config.py
+#, python-format
+msgid "Moved “%(title)s”."
+msgstr "Se movió «%(title)s»."
+
+#: config.py
+#, python-format
+msgid "%(count)s event moved."
+msgid_plural "%(count)s events moved."
+msgstr[0] "%(count)s evento movido."
+msgstr[1] "%(count)s eventos movidos."
+msgstr[2] "%(count)s eventos movidos."
+
+#: config.py
 msgid "Not saved"
 msgstr "No se guardó"
 
@@ -176,3 +193,7 @@ msgstr "Ir a una fecha"
 #: templates/django_ec_calendar/admin/inline.html
 msgid "Save it first to see its calendar."
 msgstr "Guárdalo primero para ver su calendario."
+
+#: core.py
+msgid "It was changed since, so this can't be undone."
+msgstr "Se cambió después, así que no se puede deshacer."
