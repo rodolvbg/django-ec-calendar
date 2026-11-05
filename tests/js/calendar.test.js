@@ -1976,3 +1976,74 @@ describe("undoing a saved move", () => {
         });
     });
 });
+
+describe("a CalendarInline's", () => {
+    it("filters set its events' parameters", async () => {
+        page();
+        document.body.insertAdjacentHTML(
+            "afterbegin",
+            '<div data-django-ec-calendar-filters="c"><select data-param="status__exact"><option value="">All</option><option value="booked">Booked</option></select></div>',
+        );
+        await load();
+        const setOption = vi.fn();
+        created[0].setOption = setOption;
+        const select = document.querySelector("[data-param]");
+        select.value = "booked";
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        expect(setOption).toHaveBeenLastCalledWith("eventSources", [
+            {
+                url: CONFIG.events,
+                extraParams: { ...CONFIG.params, status__exact: "booked" },
+            },
+        ]);
+        select.value = "";
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        expect(setOption).toHaveBeenLastCalledWith("eventSources", [
+            { url: CONFIG.events, extraParams: CONFIG.params },
+        ]);
+    });
+
+    it("calendar folded is made once it's opened", async () => {
+        page();
+        const wrap = document.getElementById("wrap");
+        const details = document.createElement("details");
+        wrap.replaceWith(details);
+        details.append(wrap);
+        const api = await load();
+        api.setup();
+        expect(created).toHaveLength(0);
+        details.open = true;
+        details.dispatchEvent(new Event("toggle"));
+        expect(created).toHaveLength(1);
+    });
+
+    it("calendar without an id has no filters", async () => {
+        page();
+        element().removeAttribute("id");
+        await load();
+        expect(created).toHaveLength(1);
+    });
+});
+
+describe("its resources' field in the URL", () => {
+    it("is kept by its filters", async () => {
+        window.history.replaceState(null, "", "/calendar/?columnas=room");
+        page({
+            ...CONFIG,
+            urlState: true,
+            urlParams: { resources: "columnas" },
+        });
+        await load();
+        const keep = document.createElement("div");
+        keep.setAttribute("data-django-ec-calendar-keep-state", "");
+        keep.innerHTML = '<a id="here" href="/calendar/?room=2">Blue</a>';
+        document.body.append(keep);
+        const stop = (event) => event.preventDefault();
+        document.addEventListener("click", stop);
+        document.getElementById("here").click();
+        document.removeEventListener("click", stop);
+        expect(document.getElementById("here").getAttribute("href")).toBe(
+            `${window.location.origin}/calendar/?room=2&columnas=room`,
+        );
+    });
+});

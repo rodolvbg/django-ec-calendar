@@ -4,9 +4,10 @@ may do what, its events, and moving them — for the admin
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib.auth import get_permission_codename
 from django.core.exceptions import (
@@ -16,6 +17,7 @@ from django.core.exceptions import (
 )
 from django.db import transaction
 from django.http import JsonResponse
+from django.utils.http import urlencode
 from django.utils.translation import gettext
 
 from .config import calendar_config
@@ -28,7 +30,7 @@ if TYPE_CHECKING:
     from django.http import HttpRequest
 
 #: The page's URL's parameters with its view and date (``calendar_url_state``).
-URL_PARAMS = {"view": "ec-view", "date": "ec-date"}
+URL_PARAMS = {"view": "ec-view", "date": "ec-date", "resources": "ec-resources"}
 
 #: How dragging an event (or its end) goes: not at all, saved at once,
 #: asked first, or kept until several are saved together.
@@ -88,6 +90,10 @@ class CalendarMixin(CalendarSource):
     calendar_undo_seconds = 10
     #: Whether dragging an event to another resource changes its resource.
     calendar_resource_editable = True
+    #: The other fields its resources may be of, chosen by its URL
+    #: (``?ec-resources=room``: ``get_calendar_url_params()``'s
+    #: ``resources``); without it, ``calendar_resource_field``.
+    calendar_resource_fields: Sequence[str] = ()
     #: Whether selecting dates opens the add page with them.
     calendar_selectable = True
     #: Whether its view and date go in its page's URL (``ec-view``,
@@ -149,9 +155,34 @@ class CalendarMixin(CalendarSource):
         return self.calendar_url_state
 
     def get_calendar_url_params(self, request: HttpRequest) -> dict[str, str]:
-        """The names of the URL's parameters with its view (``view``) and
-        date (``date``): ``calendar_url_params``, over ``URL_PARAMS``."""
+        """The names of the URL's parameters with its view (``view``), date
+        (``date``) and the field of its resources (``resources``):
+        ``calendar_url_params``, over ``URL_PARAMS``."""
         return {**URL_PARAMS, **self.calendar_url_params}
+
+    def _resources_query(self, request: HttpRequest) -> dict[str, str]:
+        """The URL's choice of the field of its resources, if it's one of
+        ``calendar_resource_fields``: for its events' and moves' requests."""
+        param = self.get_calendar_url_params(request)["resources"]
+        name = request.GET.get(param, "")
+        return {param: name} if name in self.calendar_resource_fields else {}
+
+    def get_calendar_resource_field(self, request: HttpRequest) -> str | None:
+        """The field of its resources: the URL's choice, of
+        ``calendar_resource_fields``, else ``calendar_resource_field``."""
+        return (
+            next(iter(self._resources_query(request).values()), None)
+            or self.calendar_resource_field
+        )
+
+    def _for_request(self, request: HttpRequest) -> Any:
+        """Itself, with the request's field of its resources."""
+        name = self.get_calendar_resource_field(request)
+        if name == self.calendar_resource_field:
+            return self
+        calendar = copy.copy(self)
+        calendar.calendar_resource_field = name
+        return calendar
 
     def get_calendar_url_views(self, request: HttpRequest) -> dict[str, str]:
         """The views' names in the URL (``calendar_url_views``)."""
@@ -251,6 +282,9 @@ class CalendarMixin(CalendarSource):
         """The values of a new object, from the calendar's add link
         (``?start=&end=``, and the resource's field): its fields' as they
         take them. For an add page's ``initial``."""
+        calendar = self._for_request(request)
+        if calendar is not self:
+            return cast("dict[str, Any]", calendar.get_calendar_initial(request))
         values = self.moved_values(request.GET.get("start"), request.GET.get("end"))
         initial = {
             name: value for name, value in (values or {}).items() if value is not None
@@ -264,12 +298,21 @@ class CalendarMixin(CalendarSource):
 
     def get_calendar_config(self, request: HttpRequest) -> dict[str, Any]:
         """The calendar's configuration, for its script."""
+        calendar = self._for_request(request)
+        if calendar is not self:
+            return cast("dict[str, Any]", calendar.get_calendar_config(request))
         urls = self.get_calendar_urls(request)
         add = urls.get("add") if self.has_calendar_add_permission(request) else None
         mode = self.get_calendar_move_mode(request)
         movable = self.has_calendar_move_permission(request)
-        move = urls.get("move") if movable else None
-        moves = urls.get("moves") if movable and mode == "batch" else None
+        # Its events and moves of the same field of resources as its page.
+        chosen = self._resources_query(request)
+        move = _with_query(urls.get("move"), chosen) if movable else None
+        moves = (
+            _with_query(urls.get("moves"), chosen)
+            if movable and mode == "batch"
+            else None
+        )
         resources = resource = None
         if self.calendar_resource_field:
             field = self._field(self.calendar_resource_field)
@@ -284,7 +327,7 @@ class CalendarMixin(CalendarSource):
         return calendar_config(
             request,
             events=str(urls["events"]),
-            params=self.get_calendar_params(request),
+            params={**self.get_calendar_params(request), **chosen},
             view=self.get_calendar_view(request),
             views=self.get_calendar_views(request),
             add=add,
@@ -457,6 +500,9 @@ class CalendarMixin(CalendarSource):
 
     def calendar_events_response(self, request: HttpRequest) -> JsonResponse:
         """The events of ``?start=&end=``, of ``get_calendar_queryset()``."""
+        calendar = self._for_request(request)
+        if calendar is not self:
+            return cast("JsonResponse", calendar.calendar_events_response(request))
         if not self.has_calendar_view_permission(request):
             raise PermissionDenied
         try:
@@ -469,6 +515,9 @@ class CalendarMixin(CalendarSource):
         """An event dragged, or its end (POST): ``pk``, ``start`` and ``end``
         (as the calendar sends them); to another resource, ``resource`` (and
         ``resource_from``, the one it was dragged from)."""
+        calendar = self._for_request(request)
+        if calendar is not self:
+            return cast("JsonResponse", calendar.calendar_move_response(request))
         try:
             move = self.prepare_calendar_move(request, request.POST.dict())
         except self.calendar_queryset_errors:
@@ -489,6 +538,9 @@ class CalendarMixin(CalendarSource):
         All of them are checked first: with any that can't be, none is
         saved, and ``errors`` says which (``{pk: message}``); else all are,
         in a transaction."""
+        calendar = self._for_request(request)
+        if calendar is not self:
+            return cast("JsonResponse", calendar.calendar_moves_response(request))
         if self.get_calendar_move_mode(request) != "batch":
             raise PermissionDenied
         try:
@@ -525,3 +577,10 @@ class CalendarMixin(CalendarSource):
                 ]
             }
         )
+
+
+def _with_query(url: str | None, query: dict[str, str]) -> str | None:
+    """``url`` with ``query`` too."""
+    if not url or not query:
+        return url
+    return f"{url}{'&' if '?' in url else '?'}{urlencode(query)}"

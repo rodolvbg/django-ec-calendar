@@ -1,14 +1,18 @@
 {% load ec_calendar i18n %}
-{# CalendarInline: the object's calendar. Its (empty) formset's management form, for the object's form. #}
+{# CalendarInline: the object's calendar, folded if it says so (calendar_collapsed), with its filters (calendar_filter_fields: selects without a name, not of the object's form). Its (empty) formset's management form, for the object's form. #}
 <div class="inline-group django-ec-calendar-inline" id="{{ inline_admin_formset.formset.prefix }}-group">
   {{ inline_admin_formset.formset.management_form }}
-  <fieldset class="module">
-    <h2>{{ inline_admin_formset.opts.verbose_name_plural|capfirst }}</h2>
-    {% ec_calendar_inline inline_admin_formset as calendar %}
-    {% if calendar %}
-      {{ calendar }}
-    {% else %}
-      <p class="help">{% translate "Save it first to see its calendar." %}</p>
-    {% endif %}
-  </fieldset>
+  {% with collapsed=inline_admin_formset.opts.calendar_collapsed title=inline_admin_formset.opts.verbose_name_plural|capfirst %}
+    <fieldset class="module">
+      {% if collapsed is None %}
+        <h2>{{ title }}</h2>
+        {% include "django_ec_calendar/admin/inline_calendar.html" %}
+      {% else %}
+        <details class="django-ec-calendar-inline-details"{% if not collapsed %} open{% endif %}>
+          <summary><h2>{{ title }}</h2></summary>
+          {% include "django_ec_calendar/admin/inline_calendar.html" %}
+        </details>
+      {% endif %}
+    </fieldset>
+  {% endwith %}
 </div>

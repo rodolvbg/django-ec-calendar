@@ -56,7 +56,15 @@ RETURN_PARAM = "_ec_calendar"
 
 #: What the calendar adds to the changelist's query string: not filters (its
 #: range; its view and date, in its page's URL, by default).
-CALENDAR_PARAMS = ("start", "end", "timeZone", "ec-view", "ec-date", RETURN_PARAM)
+CALENDAR_PARAMS = (
+    "start",
+    "end",
+    "timeZone",
+    "ec-view",
+    "ec-date",
+    "ec-resources",
+    RETURN_PARAM,
+)
 
 
 class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
@@ -188,8 +196,9 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
 
     def get_calendar_query_params(self, request: HttpRequest) -> set[str]:
         """What the calendar adds to the changelist's query string: its
-        range, its view and date (``get_calendar_url_params()``), and the
-        return parameter. Not filters."""
+        range, its view, date and field of resources
+        (``get_calendar_url_params()``), and the return parameter. Not
+        filters."""
         return {
             "start",
             "end",
@@ -418,6 +427,10 @@ class CalendarInline(InlineModelAdmin):
     its changelist would be); adding from it, the object is filled in; after
     a save, back to the object's page. It isn't a formset: it neither adds
     nor changes anything with the object's form.
+
+    It can be folded (``calendar_collapsed``), and filtered by some of the
+    model's fields (``calendar_filter_fields``: a select of each one's
+    choices, or objects, above it), without leaving the object's page.
     """
 
     template = "django_ec_calendar/admin/inline.html"
@@ -428,6 +441,12 @@ class CalendarInline(InlineModelAdmin):
     #: of the model's admin).
     calendar_view: str | None = None
     calendar_views: Sequence[str] | None = None
+    #: Whether it's folded: until it's opened (True), or open (False); None:
+    #: it can't be.
+    calendar_collapsed: bool | None = None
+    #: The model's fields its events can be filtered by, each a select of
+    #: its choices (a relation: its objects).
+    calendar_filter_fields: Sequence[str] = ()
 
     @property
     def media(self) -> Any:
@@ -479,6 +498,29 @@ class CalendarInline(InlineModelAdmin):
     ) -> bool:
         """For those who may see the model's admin's calendar."""
         return self.get_calendar_admin().has_calendar_view_permission(request)
+
+    def get_calendar_filter_fields(self, request: HttpRequest) -> list[dict[str, Any]]:
+        """Each of ``calendar_filter_fields``: its label, the changelist's
+        parameter it sets (an exact lookup) and its choices."""
+        filters = []
+        for name in self.calendar_filter_fields:
+            field = self.model._meta.get_field(name)
+            param = (
+                f"{field.name}__{field.target_field.name}__exact"
+                if field.is_relation
+                else f"{field.name}__exact"
+            )
+            filters.append(
+                {
+                    "label": str(field.verbose_name),
+                    "param": param,
+                    "choices": [
+                        (str(value), str(label))
+                        for value, label in field.get_choices(include_blank=False)
+                    ],
+                }
+            )
+        return filters
 
     def get_calendar(self, request: HttpRequest, obj: Model | None) -> Calendar | None:
         """The calendar of ``obj``'s; None: it isn't saved yet."""

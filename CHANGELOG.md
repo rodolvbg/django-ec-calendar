@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `calendar_resource_fields`: other fields its resources may be of, chosen
+  by the page's URL (`?ec-resources=room`, `get_calendar_url_params()`'s
+  `resources`); its events, moves and adding follow it.
+  `get_calendar_resource_field(request)` says which.
+- `CalendarInline.calendar_collapsed`: folded until opened, or foldable.
+- `CalendarInline.calendar_filter_fields`: a select per field above it,
+  filtering its events without leaving the object's page.
+
 ## [0.1.5] - 2026-11-05
 
 ### Fixed
