@@ -105,6 +105,9 @@ class CalendarMixin(CalendarSource):
     #: The views' names in it: ``{"timeGridWeek": "semana"}`` (those not
     #: given, their own).
     calendar_url_views: dict[str, str] = {}  # noqa: RUF012
+    #: The fields of ``calendar_resource_fields``' names in it:
+    #: ``{"room": "gabinete"}`` (those not given, their own).
+    calendar_url_resources: dict[str, str] = {}  # noqa: RUF012
     #: Whether today is tinted (never in a day's view).
     calendar_highlight_today = True
     #: Whether its toolbar has a date field, to go to a date.
@@ -160,20 +163,36 @@ class CalendarMixin(CalendarSource):
         ``calendar_url_params``, over ``URL_PARAMS``."""
         return {**URL_PARAMS, **self.calendar_url_params}
 
-    def _resources_query(self, request: HttpRequest) -> dict[str, str]:
+    def get_calendar_url_resources(self, request: HttpRequest) -> dict[str, str]:
+        """The fields' names in the URL (``calendar_url_resources``)."""
+        return dict(self.calendar_url_resources)
+
+    def _chosen_resources(self, request: HttpRequest) -> tuple[str, str] | None:
         """The URL's choice of the field of its resources, if it's one of
-        ``calendar_resource_fields``: for its events' and moves' requests."""
+        ``calendar_resource_fields``: its value in the URL, and the field."""
         param = self.get_calendar_url_params(request)["resources"]
-        name = request.GET.get(param, "")
-        return {param: name} if name in self.calendar_resource_fields else {}
+        value = request.GET.get(param, "")
+        names = {
+            name: field
+            for field, name in self.get_calendar_url_resources(request).items()
+        }
+        field = names.get(value, value)
+        return (value, field) if field in self.calendar_resource_fields else None
+
+    def _resources_query(self, request: HttpRequest) -> dict[str, str]:
+        """The URL's choice of the field of its resources, as it is in it:
+        for its events' and moves' requests."""
+        chosen = self._chosen_resources(request)
+        if chosen is None:
+            return {}
+        return {self.get_calendar_url_params(request)["resources"]: chosen[0]}
 
     def get_calendar_resource_field(self, request: HttpRequest) -> str | None:
-        """The field of its resources: the URL's choice, of
+        """The field of its resources: the URL's choice (by its name in it,
+        ``get_calendar_url_resources()``, or its own), of
         ``calendar_resource_fields``, else ``calendar_resource_field``."""
-        return (
-            next(iter(self._resources_query(request).values()), None)
-            or self.calendar_resource_field
-        )
+        chosen = self._chosen_resources(request)
+        return chosen[1] if chosen else self.calendar_resource_field
 
     def _for_request(self, request: HttpRequest) -> Any:
         """Itself, with the request's field of its resources."""
