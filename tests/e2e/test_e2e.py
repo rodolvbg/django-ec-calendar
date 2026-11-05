@@ -719,6 +719,11 @@ class TestInline(TestAppointments):
         inline = page.locator(".django-ec-calendar-inline")
         expect(inline.locator(".ec-event", has_text="María")).to_be_visible()
         picker = inline.locator(".django-ec-calendar-date")
+        # As tall as the toolbar's buttons, with their text.
+        today = inline.locator(".ec-toolbar .ec-today")
+        assert picker.bounding_box()["height"] == today.bounding_box()["height"]
+        font = "el => getComputedStyle(el).fontSize"
+        assert picker.evaluate(font) == today.evaluate(font)
         week_later = timezone.localdate() + datetime.timedelta(days=7)
         picker.fill(week_later.isoformat())
         picker.dispatch_event("change")

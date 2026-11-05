@@ -136,16 +136,28 @@
 }
 
 /* Its date field (calendar_date_picker), as its toolbar's buttons. */
+/* The date field: as tall as the toolbar's buttons, with their text —
+   EventCalendar's .ec-button font (1rem, line-height 1.5) and side padding,
+   whatever the page's own font size —, stretched to their row's height (no
+   padding of its own above and below: a browser's date field is taller
+   than a button with it, and would make the row so). */
+.django-ec-calendar .ec-datePicker {
+    display: flex; /* EventCalendar's box of it: it stretches in there. */
+}
+
 .django-ec-calendar .django-ec-calendar-date {
     box-sizing: border-box;
-    height: 2.5em;
+    align-self: stretch;
+    height: auto;
     margin: 0;
-    padding: 0 0.5em;
+    padding: 0 0.75rem;
     border: 1px solid var(--ec-button-border-color);
     border-radius: 0.25rem;
     background: var(--ec-button-bg-color);
     color: var(--ec-button-text-color);
-    font: inherit;
+    font-family: inherit;
+    font-size: 1rem;
+    line-height: 1.5;
 }
 
 .django-ec-calendar.ec-dark .django-ec-calendar-date {
