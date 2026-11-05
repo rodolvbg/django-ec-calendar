@@ -115,6 +115,13 @@ back to its page. It isn't a formset: the object's form saves as always,
 and nothing of the calendar goes with it. Before the object is saved, it
 says so.
 
+- **`calendar_collapsed`**: folded until it's opened (`True`), or open and
+  foldable (`False`); `None` (by default), always shown.
+- **`calendar_filter_fields`**: the model's fields its events can be
+  filtered by, without leaving the page — a select of each one's choices
+  (a relation: its objects) above it. With a list view in
+  `calendar_views` (`listWeek`), it's its list too.
+
 ![A professional's page, with their appointments' week](docs/screenshots/calendar-inline.png)
 
 ### In the menu
@@ -195,6 +202,13 @@ class AppointmentAdmin(CalendarAdminMixin, admin.ModelAdmin):
 - **Dragging** to another column changes its resource too, checked as the
   rest; with many-to-many, from the one it was dragged from to the other
   (`calendar_resource_editable = False`: its resource can't change).
+- **Another field**, chosen by the page's URL: with
+  `calendar_resource_fields = ("room",)`, `?ec-resources=room` has a
+  column per room (`calendar_url_params = {"resources": "columns"}`: by
+  another name). Its events, moves and adding are of that field; any other
+  value, `calendar_resource_field`'s. `get_calendar_resource_field(request)`
+  says which, for your own methods (or `self.calendar_resource_field`,
+  within them).
 
 ![A day of appointments, a column per professional](docs/screenshots/calendar-resources.png)
 

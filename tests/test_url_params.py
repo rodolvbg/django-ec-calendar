@@ -40,14 +40,22 @@ def renamed(monkeypatch):
 
 def test_by_default(admin_client):
     data = config(admin_client.get(f"{APPOINTMENTS}calendar/").content.decode())
-    assert data["urlParams"] == {"view": "ec-view", "date": "ec-date"}
+    assert data["urlParams"] == {
+        "view": "ec-view",
+        "date": "ec-date",
+        "resources": "ec-resources",
+    }
     assert data["urlViews"] == {}
     assert data["returnParam"] == "_ec_calendar"
 
 
 def test_their_names_and_the_views(admin_client, renamed):
     data = config(admin_client.get(f"{APPOINTMENTS}calendar/").content.decode())
-    assert data["urlParams"] == {"view": "vista", "date": "fecha"}
+    assert data["urlParams"] == {
+        "view": "vista",
+        "date": "fecha",
+        "resources": "ec-resources",
+    }
     assert data["urlViews"] == {"resourceTimeGridDay": "dia"}
     assert data["returnParam"] == "volver"
 
@@ -56,7 +64,11 @@ def test_only_one_named_the_other_by_default(admin_client, monkeypatch):
     model_admin = admin.site._registry[Appointment]
     monkeypatch.setattr(model_admin, "calendar_url_params", {"date": "fecha"})
     data = config(admin_client.get(f"{APPOINTMENTS}calendar/").content.decode())
-    assert data["urlParams"] == {"view": "ec-view", "date": "fecha"}
+    assert data["urlParams"] == {
+        "view": "ec-view",
+        "date": "fecha",
+        "resources": "ec-resources",
+    }
 
 
 def test_theyre_not_filters(admin_client, renamed, db):

@@ -741,6 +741,7 @@
         const names = urlParams(options);
         stateParams.add(names.view);
         stateParams.add(names.date);
+        if (names.resources) stateParams.add(names.resources);
         // What it shows: written in the URL only when it changes (not when
         // it opens).
         let shown = null;
@@ -875,7 +876,31 @@
             ...(state.date ? { date: state.date } : {}),
         });
         follow(element);
+        filterBy(element, calendar, options);
         return calendar;
+    }
+
+    /** Its filters without leaving the page (a `CalendarInline`'s): each
+     * select of `[data-django-ec-calendar-filters="<its id>"]` sets its
+     * parameter (`data-param`) of its events' requests. */
+    function filterBy(element, calendar, options) {
+        if (!element.id) return;
+        const filters = document.querySelectorAll(
+            `[data-django-ec-calendar-filters="${element.id}"]`,
+        );
+        const update = () => {
+            const params = { ...options.params };
+            for (const holder of filters) {
+                for (const select of holder.querySelectorAll("[data-param]")) {
+                    if (select.value)
+                        params[select.dataset.param] = select.value;
+                }
+            }
+            calendar.setOption("eventSources", [
+                { url: options.events, extraParams: params },
+            ]);
+        };
+        for (const holder of filters) holder.addEventListener("change", update);
     }
 
     /** Links and forms that change a calendar's page (its filters, its
@@ -953,6 +978,16 @@
             "[data-django-ec-calendar]",
         )) {
             if (element.djangoEcCalendar || !window.EventCalendar) continue;
+            // Folded (a `CalendarInline`'s): made once it's opened, at its
+            // size.
+            const folded = element.closest("details:not([open])");
+            if (folded) {
+                if (!folded.djangoEcCalendarWaits) {
+                    folded.djangoEcCalendarWaits = true;
+                    folded.addEventListener("toggle", () => setup(folded));
+                }
+                continue;
+            }
             const options = config(element);
             if (!options) continue;
             element.djangoEcCalendar = create(element, options);

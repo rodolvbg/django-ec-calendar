@@ -1,0 +1,22 @@
+{% load ec_calendar i18n %}
+{# A CalendarInline's calendar (inline.html), with its filters above it. #}
+{% ec_calendar_inline inline_admin_formset as calendar %}
+{% if calendar %}
+  {% ec_calendar_inline_filters inline_admin_formset as filters %}
+  {% if filters %}
+    <div class="django-ec-calendar-filters" data-django-ec-calendar-filters="{{ calendar.id }}">
+      {% for filter in filters %}
+        <label>
+          {{ filter.label|capfirst }}
+          <select data-param="{{ filter.param }}">
+            <option value="">{% translate "All" %}</option>
+            {% for value, label in filter.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+          </select>
+        </label>
+      {% endfor %}
+    </div>
+  {% endif %}
+  {{ calendar }}
+{% else %}
+  <p class="help">{% translate "Save it first to see its calendar." %}</p>
+{% endif %}

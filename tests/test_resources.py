@@ -323,6 +323,75 @@ class TestManyToMany:
         )
         assert list(alone.attendees.all()) == []
 
+    @pytest.fixture
+    def by_host_or_kind(self, monkeypatch):
+        model_admin = calendars._registry[Meeting]
+        monkeypatch.setattr(model_admin, "calendar_resource_fields", ("host", "kind"))
+        return model_admin
+
+    def test_of_another_field_chosen_by_the_url(
+        self, admin_client, meeting, people, by_host_or_kind, monkeypatch
+    ):
+        monkeypatch.setattr(by_host_or_kind, "calendar_move_mode", "batch")
+        page = admin_client.get(f"{MEETINGS}calendar/", {"ec-resources": "host"})
+        data = config(page.content.decode())
+        assert [item["title"] for item in data["resources"]] == [
+            "Ana",
+            "Luis",
+            "No host",
+        ]
+        assert data["resource"]["param"] == "host"
+        # Its events and moves, of the same field.
+        assert data["params"] == {"ec-resources": "host"}
+        assert data["move"].endswith("/move/?ec-resources=host")
+        assert data["moves"].endswith("/moves/?ec-resources=host")
+        query = {**DAY, "ec-resources": "kind"}
+        [event] = admin_client.get(f"{MEETINGS}calendar/events/", query).json()
+        assert event["resourceIds"] == ["call"]
+        response = admin_client.post(
+            f"{MEETINGS}calendar/moves/?ec-resources=host",
+            {
+                "moves": [
+                    {
+                        "pk": meeting.pk,
+                        "start": "2026-10-29T10:00:00",
+                        "end": "2026-10-29T11:00:00",
+                        "resource": str(people[1].pk),
+                        "resource_from": str(people[0].pk),
+                    }
+                ]
+            },
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        meeting.refresh_from_db()
+        assert meeting.host == people[1]
+        # Not one of calendar_resource_fields: its own.
+        page = admin_client.get(f"{MEETINGS}calendar/", {"ec-resources": "title"})
+        assert config(page.content.decode())["resource"]["param"] == "attendees"
+
+    def test_moved_in_another_field_and_added_in_it(
+        self, admin_client, meeting, people, by_host_or_kind
+    ):
+        response = admin_client.post(
+            f"{MEETINGS}calendar/move/?ec-resources=kind",
+            {
+                "pk": meeting.pk,
+                "start": "2026-10-29T10:00:00",
+                "end": "2026-10-29T11:00:00",
+                "resource": "visit",
+                "resource_from": "call",
+            },
+        )
+        assert response.status_code == 200
+        meeting.refresh_from_db()
+        assert meeting.kind == "visit"
+        assert set(meeting.attendees.all()) == set(people)
+        request = RequestFactory().get(
+            "/", {"ec-resources": "kind", "kind": "call", "attendees": "1"}
+        )
+        assert by_host_or_kind.get_calendar_initial(request) == {"kind": "call"}
+
 
 class TestChoices:
     class ByKind(CalendarSource):

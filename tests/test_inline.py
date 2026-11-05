@@ -69,6 +69,23 @@ class TestInTheObjectsPage:
         events = admin_client.get(data["events"], {**data["params"]}).json()
         assert [event["title"] for event in events if event.get("title")] == ["María"]
 
+    def test_folded_and_with_its_filters(self, admin_client, ana, maria, monkeypatch):
+        monkeypatch.setattr(AppointmentCalendarInline, "calendar_collapsed", True)
+        monkeypatch.setattr(
+            AppointmentCalendarInline,
+            "calendar_filter_fields",
+            ("status", "professional"),
+        )
+        html = admin_client.get(change(ana)).content.decode()
+        assert '<details class="django-ec-calendar-inline-details">' in html
+        assert 'data-django-ec-calendar-filters="appointment-calendar"' in html
+        assert '<select data-param="status__exact">' in html
+        assert '<select data-param="professional__id__exact">' in html
+        assert f'<option value="{ana.pk}">Ana</option>' in html
+        monkeypatch.setattr(AppointmentCalendarInline, "calendar_collapsed", False)
+        html = admin_client.get(change(ana)).content.decode()
+        assert '<details class="django-ec-calendar-inline-details" open>' in html
+
     def test_not_before_it_is_saved(self, admin_client, db):
         html = admin_client.get(
             reverse("admin:agenda_professional_add")

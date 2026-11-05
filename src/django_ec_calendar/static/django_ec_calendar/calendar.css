@@ -169,3 +169,26 @@
         color-scheme: dark;
     }
 }
+
+/* A CalendarInline's filters, above it, and its fold. */
+.django-ec-calendar-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin: 0.5rem 0;
+}
+
+.django-ec-calendar-filters label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.django-ec-calendar-inline-details > summary {
+    cursor: pointer;
+    list-style-position: inside;
+}
+
+.django-ec-calendar-inline-details > summary h2 {
+    display: inline;
+}

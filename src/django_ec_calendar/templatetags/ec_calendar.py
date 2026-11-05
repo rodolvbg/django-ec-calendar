@@ -72,3 +72,12 @@ def ec_calendar_inline(context: template.Context, inline_admin_formset: Any) -> 
     (``original``); None: it isn't saved yet."""
     inline = inline_admin_formset.opts
     return inline.get_calendar(context["request"], context.get("original"))
+
+
+@register.simple_tag(takes_context=True)
+def ec_calendar_inline_filters(
+    context: template.Context, inline_admin_formset: Any
+) -> list[dict[str, Any]]:
+    """A ``CalendarInline``'s filters (``get_calendar_filter_fields()``)."""
+    inline = inline_admin_formset.opts
+    return list(inline.get_calendar_filter_fields(context["request"]))
