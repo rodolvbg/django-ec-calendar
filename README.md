@@ -205,7 +205,8 @@ class AppointmentAdmin(CalendarAdminMixin, admin.ModelAdmin):
 - **Another field**, chosen by the page's URL: with
   `calendar_resource_fields = ("room",)`, `?ec-resources=room` has a
   column per room (`calendar_url_params = {"resources": "columns"}`: by
-  another name). Its events, moves and adding are of that field; any other
+  another name; `calendar_url_resources = {"room": "rooms"}`: the field
+  by another name, `?columns=rooms`). Its events, moves and adding are of that field; any other
   value, `calendar_resource_field`'s. `get_calendar_resource_field(request)`
   says which, for your own methods (or `self.calendar_resource_field`,
   within them).

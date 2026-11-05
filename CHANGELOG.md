@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `calendar_url_resources` (`get_calendar_url_resources(request)`): the
+  names of `calendar_resource_fields` in the URL (`{"room": "gabinete"}`:
+  `?ec-resources=gabinete`), as `calendar_url_views` are the views'.
+
 ## [0.1.6] - 2026-11-05
 
 ### Added

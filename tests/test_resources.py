@@ -370,6 +370,20 @@ class TestManyToMany:
         page = admin_client.get(f"{MEETINGS}calendar/", {"ec-resources": "title"})
         assert config(page.content.decode())["resource"]["param"] == "attendees"
 
+    def test_by_its_name_in_the_url(
+        self, admin_client, meeting, people, by_host_or_kind, monkeypatch
+    ):
+        monkeypatch.setattr(
+            by_host_or_kind, "calendar_url_resources", {"host": "anfitrion"}
+        )
+        page = admin_client.get(f"{MEETINGS}calendar/", {"ec-resources": "anfitrion"})
+        data = config(page.content.decode())
+        assert data["resource"]["param"] == "host"
+        assert data["params"] == {"ec-resources": "anfitrion"}
+        # Its own name too; any other, the default's.
+        page = admin_client.get(f"{MEETINGS}calendar/", {"ec-resources": "kind"})
+        assert config(page.content.decode())["resource"]["param"] == "kind"
+
     def test_moved_in_another_field_and_added_in_it(
         self, admin_client, meeting, people, by_host_or_kind
     ):
