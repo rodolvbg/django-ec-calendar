@@ -18,6 +18,7 @@ from django.contrib.admin.options import (
 )
 from django.contrib.admin.utils import quote
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
+from django.forms import Media
 from django.forms.models import _get_foreign_key, modelform_factory
 from django.http import HttpResponseRedirect, QueryDict
 from django.template.loader import select_template
@@ -100,6 +101,9 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
     calendar_return_param = RETURN_PARAM
     #: The calendar's page.
     calendar_template = "django_ec_calendar/admin/calendar.html"
+    #: The scripts and styles of the calendar's page only (a ``Media``), with
+    #: the admin's and EventCalendar's; not of its changelist nor its forms.
+    calendar_media: Media | None = None
     #: The changelist's: the admin's, and a link to the calendar.
     calendar_change_list_template = "django_ec_calendar/admin/change_list.html"
     calendar_queryset_errors = (IncorrectLookupParameters,)
@@ -110,6 +114,10 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
 
     def get_source_model(self) -> type[Model]:
         return self.model
+
+    def get_calendar_media(self, request: HttpRequest) -> Media:
+        """The calendar's page's own scripts and styles (``calendar_media``)."""
+        return self.calendar_media or Media()
 
     def get_calendar_filters(self, request: HttpRequest) -> bool:
         """Whether its page shows the changelist's filters and search
@@ -322,7 +330,7 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
             # its changelist's filters are next to the content (before,
             # after its container).
             "django_6": django.VERSION >= (6, 0),
-            "media": self.media + calendar_media(),
+            "media": self.media + calendar_media() + self.get_calendar_media(request),
         }
         return TemplateResponse(request, self.calendar_template, context)
 

@@ -126,6 +126,18 @@ class TestCalendarPage:
         assert "django_ec_calendar/calendar.js" in html
         assert f'href="{reverse("admin:agenda_booking_add")}"' in html
 
+    def test_its_pages_own_media(self, superuser, monkeypatch):
+        from django.forms import Media
+
+        booking_admin = admin.site._registry[Booking]
+        own = Media(css={"all": ["agenda/page.css"]}, js=["agenda/page.js"])
+        monkeypatch.setattr(booking_admin, "calendar_media", own)
+        html = superuser.get(f"{BOOKINGS}calendar/").content.decode()
+        assert "agenda/page.css" in html
+        assert "agenda/page.js" in html
+        # Not on its changelist.
+        assert "agenda/page.js" not in superuser.get(BOOKINGS).content.decode()
+
     def test_keeps_the_changelists_filters(self, superuser, blue):
         query = {"room__id__exact": str(blue.pk), "q": "call"}
         html = superuser.get(f"{BOOKINGS}calendar/", query).content.decode()
