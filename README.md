@@ -364,6 +364,7 @@ Each option has a method that takes the request, as the admin's
 | `get_calendar_date_picker(request)` | `calendar_date_picker`. |
 | `get_calendar_url_params(request)`, `get_calendar_url_views(request)`, `get_calendar_return_param(request)` | `calendar_url_params`, `calendar_url_views`, `calendar_return_param`. |
 | `get_calendar_filters(request)`, `get_calendar_url_state(request)`, `get_calendar_highlight_today(request)` | Their attributes. |
+| `get_calendar_media(request)` | `calendar_media`: a `Media` of the calendar's page only (not its changelist's nor its forms'), with the admin's and EventCalendar's. |
 | `has_calendar_move_permission(request, obj=None)` | Its move mode isn't `"off"`, and one may change it. |
 | `has_calendar_add_permission(request)` | `calendar_selectable`, and one may add. |
 
