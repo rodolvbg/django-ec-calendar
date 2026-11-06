@@ -899,6 +899,8 @@
             calendar.setOption("eventSources", [
                 { url: options.events, extraParams: params },
             ]);
+            // Setting them doesn't load them again.
+            calendar.refetchEvents();
         };
         for (const holder of filters) holder.addEventListener("change", update);
     }

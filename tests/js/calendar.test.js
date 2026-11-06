@@ -1986,7 +1986,9 @@ describe("a CalendarInline's", () => {
         );
         await load();
         const setOption = vi.fn();
+        const refetchEvents = vi.fn();
         created[0].setOption = setOption;
+        created[0].refetchEvents = refetchEvents;
         const select = document.querySelector("[data-param]");
         select.value = "booked";
         select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1996,6 +1998,7 @@ describe("a CalendarInline's", () => {
                 extraParams: { ...CONFIG.params, status__exact: "booked" },
             },
         ]);
+        expect(refetchEvents).toHaveBeenCalledOnce();
         select.value = "";
         select.dispatchEvent(new Event("change", { bubbles: true }));
         expect(setOption).toHaveBeenLastCalledWith("eventSources", [

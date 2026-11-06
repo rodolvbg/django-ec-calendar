@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names of `calendar_resource_fields` in the URL (`{"room": "gabinete"}`:
   `?ec-resources=gabinete`), as `calendar_url_views` are the views'.
 
+### Fixed
+
+- A `CalendarInline`'s filters load its events again: setting their
+  parameters alone didn't.
+
 ## [0.1.6] - 2026-11-05
 
 ### Added
