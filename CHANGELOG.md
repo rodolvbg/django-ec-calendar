@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `calendar_media`'s scripts and styles come after EventCalendar's and the
+  package's, which make the calendar: `Media` interleaved them before
+  (`agenda.js` before `django_ec_calendar/calendar.js`), unless listed.
+
 ## [0.1.8] - 2026-11-06
 
 ### Added

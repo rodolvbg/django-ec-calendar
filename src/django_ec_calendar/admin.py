@@ -68,6 +68,22 @@ CALENDAR_PARAMS = (
 )
 
 
+def after(first: Media, then: Media) -> Media:
+    """``first`` and ``then``, each of ``then``'s after ``first``'s: ``+``
+    merges lists without an order between them, interleaving them."""
+    # Its merged lists (private, as django-stubs has them, but Django's own
+    # since 2.0).
+    first_css, then_css = first._css, then._css  # type: ignore[attr-defined]
+    first_js, then_js = first._js, then._js  # type: ignore[attr-defined]
+    return first + Media(
+        css={
+            medium: [*first_css.get(medium, []), *paths]
+            for medium, paths in then_css.items()
+        },
+        js=[*first_js, *then_js],
+    )
+
+
 class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
     """``ModelAdmin`` mixin: a calendar of the changelist's objects, a click
     away from it ("Calendar")::
@@ -103,6 +119,7 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
     calendar_template = "django_ec_calendar/admin/calendar.html"
     #: The scripts and styles of the calendar's page only (a ``Media``), with
     #: the admin's and EventCalendar's; not of its changelist nor its forms.
+    #: After EventCalendar's and the package's, which make the calendar.
     calendar_media: Media | None = None
     #: The changelist's: the admin's, and a link to the calendar.
     calendar_change_list_template = "django_ec_calendar/admin/change_list.html"
@@ -330,7 +347,8 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
             # its changelist's filters are next to the content (before,
             # after its container).
             "django_6": django.VERSION >= (6, 0),
-            "media": self.media + calendar_media() + self.get_calendar_media(request),
+            "media": self.media
+            + after(calendar_media(), self.get_calendar_media(request)),
         }
         return TemplateResponse(request, self.calendar_template, context)
 

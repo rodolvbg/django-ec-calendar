@@ -11,6 +11,7 @@ from agenda.models import Booking, Holiday, Room
 from django.contrib import admin
 from django.contrib.admin.models import LogEntry
 from django.contrib.auth.models import Permission, User
+from django.forms import Media
 from django.test import Client
 from django.urls import reverse
 from django.utils import translation
@@ -127,8 +128,6 @@ class TestCalendarPage:
         assert f'href="{reverse("admin:agenda_booking_add")}"' in html
 
     def test_its_pages_own_media(self, superuser, monkeypatch):
-        from django.forms import Media
-
         booking_admin = admin.site._registry[Booking]
         own = Media(css={"all": ["agenda/page.css"]}, js=["agenda/page.js"])
         monkeypatch.setattr(booking_admin, "calendar_media", own)
@@ -137,6 +136,35 @@ class TestCalendarPage:
         assert "agenda/page.js" in html
         # Not on its changelist.
         assert "agenda/page.js" not in superuser.get(BOOKINGS).content.decode()
+
+    def test_its_own_media_after_the_calendars(self, superuser, monkeypatch):
+        """Theirs after EventCalendar's and the package's, which make the
+        calendar: Media's ``+`` alone interleaves them."""
+        booking_admin = admin.site._registry[Booking]
+        own = Media(
+            css={"all": ["agenda/page.css"], "print": ["agenda/print.css"]},
+            js=["agenda/page.js", "agenda/popup.js"],
+        )
+        monkeypatch.setattr(booking_admin, "calendar_media", own)
+        html = superuser.get(f"{BOOKINGS}calendar/").content.decode()
+        order = [
+            "event-calendar.min.js",
+            "django_ec_calendar/calendar.js",
+            "agenda/page.js",
+            "agenda/popup.js",
+        ]
+        assert [html.index(name) for name in order] == sorted(
+            html.index(name) for name in order
+        )
+        assert html.index("django_ec_calendar/calendar.css") < html.index(
+            "agenda/page.css"
+        )
+        assert "agenda/print.css" in html
+        # Listed already in theirs: once.
+        own = Media(js=["django_ec_calendar/calendar.js", "agenda/page.js"])
+        monkeypatch.setattr(booking_admin, "calendar_media", own)
+        html = superuser.get(f"{BOOKINGS}calendar/").content.decode()
+        assert html.count("django_ec_calendar/calendar.js") == 1
 
     def test_keeps_the_changelists_filters(self, superuser, blue):
         query = {"room__id__exact": str(blue.pk), "q": "call"}
