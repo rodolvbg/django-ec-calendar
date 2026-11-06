@@ -877,7 +877,17 @@
         });
         follow(element);
         filterBy(element, calendar, options);
+        keepForm(element);
         return calendar;
+    }
+
+    /** Its buttons (EventCalendar's have no `type`) don't submit the form
+     * it's in (a `CalendarInline`'s, the object's form). */
+    function keepForm(element) {
+        element.addEventListener("click", (event) => {
+            if (event.target.closest?.("button:not([type])"))
+                event.preventDefault();
+        });
     }
 
     /** Its filters without leaving the page (a `CalendarInline`'s): each

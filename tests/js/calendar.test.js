@@ -1978,6 +1978,28 @@ describe("undoing a saved move", () => {
 });
 
 describe("a CalendarInline's", () => {
+    it("buttons don't submit the object's form", async () => {
+        page();
+        await load();
+        element().insertAdjacentHTML(
+            "beforeend",
+            '<button class="ec-button"><span>Day</span></button><button type="submit">Save</button>',
+        );
+        const day = element().querySelector(".ec-button");
+        const save = element().querySelector("[type=submit]");
+        const click = (target) => {
+            const event = new MouseEvent("click", {
+                bubbles: true,
+                cancelable: true,
+            });
+            target.dispatchEvent(event);
+            return event.defaultPrevented;
+        };
+        expect(click(day.firstChild)).toBe(true);
+        expect(click(save)).toBe(false);
+        expect(click(element())).toBe(false);
+    });
+
     it("filters set its events' parameters", async () => {
         page();
         document.body.insertAdjacentHTML(

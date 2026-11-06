@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A `CalendarInline`'s filters load its events again: setting their
   parameters alone didn't.
+- A `CalendarInline`'s calendar's buttons (its views, today, previous
+  and next) don't submit the object's form: EventCalendar's have no `type`.
 
 ## [0.1.6] - 2026-11-05
 
