@@ -33,7 +33,8 @@
  * changes it too (`config.resource.editable`), and adding sends it. With
  * `config.urlState`, the view and its date are in the page's URL (`ec-view`,
  * `ec-date`, or `config.urlParams`' names; the views by `config.urlViews`'
- * names), read when it opens, and written only when one goes elsewhere
+ * names; and other languages' too, `config.urlAliases`), read when it opens,
+ * and written only when one goes elsewhere
  * (opening it leaves its URL as it is): back from an event's page, the same
  * place. With `config.returnParam`, the pages it opens get its URL, to come
  * back to it after a save.
@@ -185,17 +186,34 @@
         ...(options.urlParams ?? {}),
     });
 
+    /** A parameter's names in the URL: its own (`config.urlParams`'), then
+     * its other languages' (`config.urlAliases.params`). */
+    const paramNames = (options, key) => [
+        urlParams(options)[key],
+        ...(options.urlAliases?.params?.[key] ?? []),
+    ];
+
+    /** The first of `names` the query has. */
+    const firstOf = (query, names) =>
+        names.map((name) => query.get(name)).find((value) => value) ?? null;
+
     /** The view and date of the page's URL, if they're the calendar's (a
-     * view by its name in the URL, `config.urlViews`, or its own). */
+     * view by its name in the URL, `config.urlViews`, in any language, or
+     * its own). */
     function readState(options) {
-        const names = urlParams(options);
         const query = new URLSearchParams(window.location.search);
-        let view = query.get(names.view);
-        const date = query.get(names.date) ?? "";
-        const named = Object.entries(options.urlViews ?? {}).find(
-            ([, alias]) => alias === view,
+        let view = firstOf(query, paramNames(options, "view"));
+        const date = firstOf(query, paramNames(options, "date")) ?? "";
+        const aliases = options.urlAliases?.views ?? {};
+        const named = [
+            ...Object.keys(options.urlViews ?? {}),
+            ...Object.keys(aliases),
+        ].find(
+            (type) =>
+                options.urlViews?.[type] === view ||
+                aliases[type]?.includes(view),
         );
-        if (named) view = named[0];
+        if (named) view = named;
         return {
             view: [options.view, ...options.views].includes(view)
                 ? view
@@ -739,9 +757,11 @@
 
         const state = options.urlState ? readState(options) : {};
         const names = urlParams(options);
-        stateParams.add(names.view);
-        stateParams.add(names.date);
-        if (names.resources) stateParams.add(names.resources);
+        for (const key of ["view", "date", "resources"]) {
+            for (const name of paramNames(options, key)) {
+                if (name) stateParams.add(name);
+            }
+        }
         // What it shows: written in the URL only when it changes (not when
         // it opens).
         let shown = null;
@@ -786,6 +806,12 @@
                 shown = now;
                 if (opening) return; // Its URL as it is.
                 const url = new URL(window.location.href);
+                // In this language's names only.
+                for (const key of ["view", "date"]) {
+                    for (const name of paramNames(options, key).slice(1)) {
+                        url.searchParams.delete(name);
+                    }
+                }
                 url.searchParams.set(
                     names.view,
                     options.urlViews?.[info.view.type] ?? info.view.type,

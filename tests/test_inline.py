@@ -86,6 +86,42 @@ class TestInTheObjectsPage:
         html = admin_client.get(change(ana)).content.decode()
         assert '<details class="django-ec-calendar-inline-details" open>' in html
 
+    def test_with_its_admins_list_filters(self, admin_client, ana, maria, monkeypatch):
+        """A list filter of its model's admin: its parameter and options,
+        and its events filtered by it."""
+
+        class StatusFilter(admin.SimpleListFilter):
+            title = "state"
+            parameter_name = "state"
+
+            def lookups(self, request, model_admin):
+                return [("booked", "Booked"), ("done", "Done")]
+
+            def queryset(self, request, queryset):
+                if self.value():
+                    return queryset.filter(status=self.value())
+                return queryset
+
+        appointments = admin.site._registry[Appointment]
+        monkeypatch.setattr(appointments, "list_filter", ("professional", StatusFilter))
+        monkeypatch.setattr(
+            AppointmentCalendarInline, "calendar_filter_fields", (StatusFilter,)
+        )
+        html = admin_client.get(change(ana)).content.decode()
+        assert '<select data-param="state">' in html
+        assert '<option value="done">Done</option>' in html
+        data = config(html)
+        events = admin_client.get(
+            data["events"],
+            {
+                **data["params"],
+                "state": "done",
+                "start": "2026-10-29T00:00:00",
+                "end": "2026-10-30T00:00:00",
+            },
+        ).json()
+        assert [event for event in events if event.get("title")] == []
+
     def test_not_before_it_is_saved(self, admin_client, db):
         html = admin_client.get(
             reverse("admin:agenda_professional_add")

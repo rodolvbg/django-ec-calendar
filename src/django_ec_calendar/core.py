@@ -20,7 +20,7 @@ from django.http import JsonResponse
 from django.utils.http import urlencode
 from django.utils.translation import gettext
 
-from .config import calendar_config
+from .config import calendar_config, translations
 from .source import NO_RESOURCE, ONE_DAY, CalendarSource
 
 if TYPE_CHECKING:
@@ -100,14 +100,15 @@ class CalendarMixin(CalendarSource):
     #: ``ec-date``): one comes back to the same place, and can share it.
     calendar_url_state = True
     #: Their names: ``{"view": "vista", "date": "fecha"}`` (those not given,
-    #: ``URL_PARAMS``').
-    calendar_url_params: dict[str, str] = {}  # noqa: RUF012
+    #: ``URL_PARAMS``'). Translatable (``gettext_lazy``), as the views' and
+    #: the fields' names: the active language's, and any other's still read.
+    calendar_url_params: dict[str, Any] = {}  # noqa: RUF012
     #: The views' names in it: ``{"timeGridWeek": "semana"}`` (those not
     #: given, their own).
-    calendar_url_views: dict[str, str] = {}  # noqa: RUF012
+    calendar_url_views: dict[str, Any] = {}  # noqa: RUF012
     #: The fields of ``calendar_resource_fields``' names in it:
     #: ``{"room": "gabinete"}`` (those not given, their own).
-    calendar_url_resources: dict[str, str] = {}  # noqa: RUF012
+    calendar_url_resources: dict[str, Any] = {}  # noqa: RUF012
     #: Whether today is tinted (never in a day's view).
     calendar_highlight_today = True
     #: Whether its toolbar has a date field, to go to a date.
@@ -160,32 +161,72 @@ class CalendarMixin(CalendarSource):
     def get_calendar_url_params(self, request: HttpRequest) -> dict[str, str]:
         """The names of the URL's parameters with its view (``view``), date
         (``date``) and the field of its resources (``resources``):
-        ``calendar_url_params``, over ``URL_PARAMS``."""
-        return {**URL_PARAMS, **self.calendar_url_params}
+        ``calendar_url_params``, over ``URL_PARAMS``; in the active
+        language."""
+        names = {**URL_PARAMS, **self.calendar_url_params}
+        return {key: str(name) for key, name in names.items()}
 
     def get_calendar_url_resources(self, request: HttpRequest) -> dict[str, str]:
-        """The fields' names in the URL (``calendar_url_resources``)."""
-        return dict(self.calendar_url_resources)
+        """The fields' names in the URL (``calendar_url_resources``), in the
+        active language."""
+        return {field: str(name) for field, name in self.calendar_url_resources.items()}
+
+    def get_calendar_url_aliases(
+        self, request: HttpRequest
+    ) -> dict[str, dict[str, list[str]]]:
+        """The other names it reads in the URL: the other languages' of the
+        translated ones, of its parameters (``params``, by their key:
+        ``view``…), its views (``views``) and its fields of resources
+        (``resources``), by their own."""
+        kinds = {
+            "params": {**URL_PARAMS, **self.calendar_url_params},
+            "views": self.calendar_url_views,
+            "resources": self.calendar_url_resources,
+        }
+        return {
+            kind: {
+                key: others
+                for key, name in names.items()
+                if (others := translations(name)[1:])
+            }
+            for kind, names in kinds.items()
+        }
+
+    def _url_names(
+        self, request: HttpRequest, kind: str, key: str, name: str
+    ) -> list[str]:
+        """``name`` (``kind``'s ``key``'s), and its other names in the URL."""
+        return [name, *self.get_calendar_url_aliases(request)[kind].get(key, [])]
 
     def _chosen_resources(self, request: HttpRequest) -> tuple[str, str] | None:
         """The URL's choice of the field of its resources, if it's one of
         ``calendar_resource_fields``: its value in the URL, and the field."""
         param = self.get_calendar_url_params(request)["resources"]
-        value = request.GET.get(param, "")
+        value = next(
+            (
+                request.GET[name]
+                for name in self._url_names(request, "params", "resources", param)
+                if request.GET.get(name)
+            ),
+            "",
+        )
         names = {
-            name: field
+            other: field
             for field, name in self.get_calendar_url_resources(request).items()
+            for other in self._url_names(request, "resources", field, name)
         }
         field = names.get(value, value)
         return (value, field) if field in self.calendar_resource_fields else None
 
     def _resources_query(self, request: HttpRequest) -> dict[str, str]:
-        """The URL's choice of the field of its resources, as it is in it:
-        for its events' and moves' requests."""
+        """The URL's choice of the field of its resources, in the active
+        language: for its events' and moves' requests."""
         chosen = self._chosen_resources(request)
         if chosen is None:
             return {}
-        return {self.get_calendar_url_params(request)["resources"]: chosen[0]}
+        field = chosen[1]
+        name = self.get_calendar_url_resources(request).get(field, field)
+        return {self.get_calendar_url_params(request)["resources"]: name}
 
     def get_calendar_resource_field(self, request: HttpRequest) -> str | None:
         """The field of its resources: the URL's choice (by its name in it,
@@ -204,8 +245,9 @@ class CalendarMixin(CalendarSource):
         return calendar
 
     def get_calendar_url_views(self, request: HttpRequest) -> dict[str, str]:
-        """The views' names in the URL (``calendar_url_views``)."""
-        return dict(self.calendar_url_views)
+        """The views' names in the URL (``calendar_url_views``), in the
+        active language."""
+        return {view: str(name) for view, name in self.calendar_url_views.items()}
 
     def get_calendar_highlight_today(self, request: HttpRequest) -> bool:
         """Whether today is tinted (``calendar_highlight_today``)."""
@@ -360,6 +402,7 @@ class CalendarMixin(CalendarSource):
             url_state=self.get_calendar_url_state(request),
             url_params=self.get_calendar_url_params(request),
             url_views=self.get_calendar_url_views(request),
+            url_aliases=self.get_calendar_url_aliases(request),
             highlight_today=self.get_calendar_highlight_today(request),
             date_picker=self.get_calendar_date_picker(request),
             outside_hours=self.calendar_outside_hours,

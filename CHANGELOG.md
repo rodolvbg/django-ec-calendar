@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `CalendarInline.calendar_filter_fields` takes list filters of its model's
+  admin's `list_filter` too (`SimpleListFilter` classes, such as
+  django-admin-select-filter's): their parameters and options, translated
+  or not.
+- Translatable names in the URL (`gettext_lazy`): `calendar_url_params`,
+  `calendar_url_views`, `calendar_url_resources` and
+  `calendar_return_param` are the active language's, and any other's of
+  `LANGUAGES` is still read (`get_calendar_url_aliases()`, the config's
+  `urlAliases`): a link in another language, a language switched.
+
 ## [0.1.9] - 2026-11-06
 
 ### Fixed

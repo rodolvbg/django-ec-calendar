@@ -599,6 +599,34 @@ describe("its place in the page's URL", () => {
         );
     });
 
+    it("in another language's names too, written in its own", async () => {
+        // A language switched: the URL in English, the page in Spanish.
+        window.history.replaceState(
+            null,
+            "",
+            "/calendar/?room=1&view=week&date=2026-11-02",
+        );
+        page({
+            ...CONFIG,
+            urlState: true,
+            urlParams: { view: "vista", date: "fecha" },
+            urlViews: { timeGridWeek: "semana" },
+            urlAliases: {
+                params: { view: ["view"], date: ["date"] },
+                views: { timeGridWeek: ["week"], dayGridMonth: ["month"] },
+                resources: {},
+            },
+        });
+        await load();
+        expect(options().view).toBe("timeGridWeek");
+        expect(options().date).toBe("2026-11-02");
+        options().datesSet(shown("timeGridWeek", "2026-11-02"));
+        options().datesSet(shown("dayGridMonth", "2026-11-01"));
+        expect(window.location.search).toBe(
+            "?room=1&vista=dayGridMonth&fecha=2026-11-01",
+        );
+    });
+
     it("with a partial set of names, the rest by default", async () => {
         window.history.replaceState(
             null,

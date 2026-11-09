@@ -384,6 +384,28 @@ class TestManyToMany:
         page = admin_client.get(f"{MEETINGS}calendar/", {"ec-resources": "kind"})
         assert config(page.content.decode())["resource"]["param"] == "kind"
 
+    def test_by_its_translated_name(
+        self, admin_client, meeting, by_host_or_kind, monkeypatch, settings
+    ):
+        """In the active language; another's still (a language switched)."""
+        from django.utils.translation import gettext_lazy, override
+
+        settings.LANGUAGES = [("en", "English"), ("es", "Spanish")]
+        monkeypatch.setattr(
+            by_host_or_kind,
+            "calendar_url_params",
+            {"resources": gettext_lazy("List")},
+        )
+        monkeypatch.setattr(
+            by_host_or_kind, "calendar_url_resources", {"host": gettext_lazy("Today")}
+        )
+        with override("es"):
+            page = admin_client.get(f"{MEETINGS}calendar/", {"List": "Today"})
+        data = config(page.content.decode())
+        assert data["resource"]["param"] == "host"
+        assert data["params"] == {"Lista": "Hoy"}
+        assert data["urlAliases"]["resources"] == {"host": ["Today"]}
+
     def test_moved_in_another_field_and_added_in_it(
         self, admin_client, meeting, people, by_host_or_kind
     ):

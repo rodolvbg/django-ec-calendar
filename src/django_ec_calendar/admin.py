@@ -28,7 +28,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext
 from django.views.decorators.http import require_POST
 
-from .config import calendar_media
+from .config import calendar_media, translations
 from .core import MOVE_MODES, CalendarMixin, CalendarMove, CalendarMoveError
 from .source import NO_RESOURCE
 from .widget import Calendar
@@ -36,6 +36,7 @@ from .widget import Calendar
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from django.contrib.admin.filters import ListFilter
     from django.contrib.admin.views.main import ChangeList
     from django.db.models import Model, QuerySet
     from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -114,7 +115,8 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
     calendar_filters = True
     #: The parameter that takes the calendar's URL to the pages it opens:
     #: after a save, back to it.
-    calendar_return_param = RETURN_PARAM
+    #: Translatable (``gettext_lazy``): any language's is read.
+    calendar_return_param: Any = RETURN_PARAM
     #: The calendar's page.
     calendar_template = "django_ec_calendar/admin/calendar.html"
     #: The scripts and styles of the calendar's page only (a ``Media``), with
@@ -216,21 +218,33 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
         return {name: str(value) for name, value in filters.items()}
 
     def get_calendar_return_param(self, request: HttpRequest) -> str | None:
-        """``calendar_return_param``."""
-        return self.calendar_return_param
+        """``calendar_return_param``, in the active language."""
+        param = self.calendar_return_param
+        return None if param is None else str(param)
 
     def get_calendar_query_params(self, request: HttpRequest) -> set[str]:
         """What the calendar adds to the changelist's query string: its
         range, its view, date and field of resources
         (``get_calendar_url_params()``), and the return parameter. Not
         filters."""
+        params = self.get_calendar_url_params(request)
+        aliases = self.get_calendar_url_aliases(request)["params"]
         return {
             "start",
             "end",
             "timeZone",
-            *self.get_calendar_url_params(request).values(),
-            str(self.get_calendar_return_param(request)),
+            *params.values(),
+            *(name for names in aliases.values() for name in names),
+            *self._return_params(request),
         }
+
+    def _return_params(self, request: HttpRequest) -> list[str]:
+        """The return parameter's names: the active language's, then the
+        other languages' (translated)."""
+        param = self.get_calendar_return_param(request)
+        if param is None:
+            return []
+        return [param, *translations(self.calendar_return_param)[1:]]
 
     def get_calendar_event_url(self, request: HttpRequest, obj: Model) -> str | None:
         """Its change page (read-only, for who may only view it)."""
@@ -404,7 +418,14 @@ class CalendarAdminMixin(CalendarMixin, BaseModelAdmin):
         """The calendar the page was opened from (``_ec_calendar``): its page,
         or another of the admin's (an inline's, ``CalendarInline``), to go
         back to it; None: not from it (or not an admin's page)."""
-        url = request.GET.get(str(self.get_calendar_return_param(request)), "")
+        url = next(
+            (
+                request.GET[name]
+                for name in self._return_params(request)
+                if request.GET.get(name)
+            ),
+            "",
+        )
         try:
             admin = reverse(f"{self.admin_site.name}:index")
         except NoReverseMatch:
@@ -470,9 +491,12 @@ class CalendarInline(InlineModelAdmin):
     #: Whether it's folded: until it's opened (True), or open (False); None:
     #: it can't be.
     calendar_collapsed: bool | None = None
-    #: The model's fields its events can be filtered by, each a select of
-    #: its choices (a relation: its objects).
-    calendar_filter_fields: Sequence[str] = ()
+    #: What its events can be filtered by, each a select: the model's fields
+    #: (their choices; a relation: its objects), or list filters of its
+    #: model's admin's ``list_filter`` (``SimpleListFilter`` classes, such
+    #: as django-admin-select-filter's: their parameters and values, which
+    #: may be translated).
+    calendar_filter_fields: Sequence[str | type[ListFilter]] = ()
 
     @property
     def media(self) -> Any:
@@ -527,9 +551,13 @@ class CalendarInline(InlineModelAdmin):
 
     def get_calendar_filter_fields(self, request: HttpRequest) -> list[dict[str, Any]]:
         """Each of ``calendar_filter_fields``: its label, the changelist's
-        parameter it sets (an exact lookup) and its choices."""
+        parameter it sets (a field's: an exact lookup; a list filter's: its
+        own) and its choices."""
         filters = []
         for name in self.calendar_filter_fields:
+            if not isinstance(name, str):
+                filters.append(self._list_filter(request, name))
+                continue
             field = self.model._meta.get_field(name)
             param = (
                 f"{field.name}__{field.target_field.name}__exact"
@@ -547,6 +575,25 @@ class CalendarInline(InlineModelAdmin):
                 }
             )
         return filters
+
+    def _list_filter(
+        self, request: HttpRequest, filter_class: type[ListFilter]
+    ) -> dict[str, Any]:
+        """A list filter's select: its title, parameter and options (its
+        ``lookup_choices``), as its model's admin's changelist has them."""
+        spec: Any = filter_class(
+            request,
+            {},
+            self.model,
+            self.get_calendar_admin(),  # type: ignore[arg-type]
+        )
+        return {
+            "label": str(spec.title),
+            "param": str(spec.parameter_name),
+            "choices": [
+                (str(value), str(label)) for value, label in spec.lookup_choices
+            ],
+        }
 
     def get_calendar(self, request: HttpRequest, obj: Model | None) -> Calendar | None:
         """The calendar of ``obj``'s; None: it isn't saved yet."""

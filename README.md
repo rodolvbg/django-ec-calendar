@@ -78,7 +78,10 @@ The changelist gets a "Calendar" link, next to "Add":
   `calendar_url_params = {"view": "vista", "date": "fecha"}`,
   `calendar_url_views = {"timeGridWeek": "semana"}` (`?vista=semana`); the
   return parameter, `calendar_return_param` (`_ec_calendar`). In the
-  template tag, `view_param` and `date_param`.
+  template tag, `view_param` and `date_param`. Translatable
+  (`gettext_lazy`, as the fields' names of `calendar_url_resources`): the
+  active language's, and any other's of `LANGUAGES` still read, so a link
+  in another language, or a language switched, opens it there too.
 - **Its views**: `calendar_views` — by default month, week, day and list
   (`dayGridMonth`, `timeGridWeek`, `timeGridDay`, `listMonth`; any of
   [EventCalendar's](https://github.com/vkurko/calendar#view), the
@@ -117,10 +120,13 @@ says so.
 
 - **`calendar_collapsed`**: folded until it's opened (`True`), or open and
   foldable (`False`); `None` (by default), always shown.
-- **`calendar_filter_fields`**: the model's fields its events can be
-  filtered by, without leaving the page — a select of each one's choices
-  (a relation: its objects) above it. With a list view in
-  `calendar_views` (`listWeek`), it's its list too.
+- **`calendar_filter_fields`**: what its events can be filtered by,
+  without leaving the page — a select of each one above it: the model's
+  fields (their choices; a relation: its objects), or list filters of its
+  model's admin's `list_filter` (`SimpleListFilter` classes, such as
+  [django-admin-select-filter](https://github.com/rodolvbg/django-admin-select-filter)'s,
+  with their parameters and values, translated or not). With a list view
+  in `calendar_views` (`listWeek`), it's its list too.
 
 ![A professional's page, with their appointments' week](docs/screenshots/calendar-inline.png)
 
@@ -362,7 +368,8 @@ Each option has a method that takes the request, as the admin's
 | `get_calendar_move_mode(request)` | `calendar_move_mode`. |
 | `get_calendar_undo_seconds(request)` | `calendar_undo`, `calendar_undo_seconds` (0: none). |
 | `get_calendar_date_picker(request)` | `calendar_date_picker`. |
-| `get_calendar_url_params(request)`, `get_calendar_url_views(request)`, `get_calendar_return_param(request)` | `calendar_url_params`, `calendar_url_views`, `calendar_return_param`. |
+| `get_calendar_url_params(request)`, `get_calendar_url_views(request)`, `get_calendar_return_param(request)` | `calendar_url_params`, `calendar_url_views`, `calendar_return_param`, in the active language. |
+| `get_calendar_url_aliases(request)` | The other languages' names it reads too (`{"params": …, "views": …, "resources": …}`). |
 | `get_calendar_filters(request)`, `get_calendar_url_state(request)`, `get_calendar_highlight_today(request)` | Their attributes. |
 | `get_calendar_media(request)` | `calendar_media`: a `Media` of the calendar's page only (not its changelist's nor its forms'), with the admin's and EventCalendar's, after theirs (no need to list `django_ec_calendar/calendar.js` before yours). |
 | `has_calendar_move_permission(request, obj=None)` | Its move mode isn't `"off"`, and one may change it. |

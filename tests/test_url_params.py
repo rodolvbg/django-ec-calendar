@@ -118,3 +118,91 @@ def test_in_the_tag():
         '{% ec_calendar "/e/" id="t" view_param="vista" date_param="fecha" %}'
     ).render(Context({"request": RequestFactory().get("/")}))
     assert config(html, "t")["urlParams"] == {"view": "vista", "date": "fecha"}
+
+
+@pytest.fixture
+def translated(monkeypatch, settings):
+    """Its names translated (gettext_lazy): Spanish and English."""
+    from django.utils.translation import gettext_lazy
+
+    settings.LANGUAGES = [("en", "English"), ("es", "Spanish")]
+    model_admin = admin.site._registry[Appointment]
+    monkeypatch.setattr(
+        model_admin,
+        "calendar_url_params",
+        {"view": gettext_lazy("Week"), "date": gettext_lazy("Day")},
+    )
+    monkeypatch.setattr(
+        model_admin, "calendar_url_views", {"listWeek": gettext_lazy("List")}
+    )
+    monkeypatch.setattr(model_admin, "calendar_return_param", gettext_lazy("Today"))
+    return model_admin
+
+
+def test_translated_in_the_active_language(admin_client, translated):
+    from django.utils.translation import override
+
+    with override("es"):
+        data = config(admin_client.get(f"{APPOINTMENTS}calendar/").content.decode())
+    assert data["urlParams"] == {
+        "view": "Semana",
+        "date": "Día",
+        "resources": "ec-resources",
+    }
+    assert data["urlViews"] == {"listWeek": "Lista"}
+    assert data["returnParam"] == "Hoy"
+    # The other languages', read too.
+    assert data["urlAliases"] == {
+        "params": {"view": ["Week"], "date": ["Day"]},
+        "views": {"listWeek": ["List"]},
+        "resources": {},
+    }
+
+
+def test_another_languages_arent_filters(admin_client, translated, db):
+    """A language switched keeps the query: still not filters."""
+    from django.utils.translation import override
+
+    query = {"Week": "List", "Day": "2026-10-29", "Today": "/admin/"}
+    with override("es"):
+        page = admin_client.get(f"{APPOINTMENTS}calendar/", query)
+        assert page.status_code == 200
+        events = admin_client.get(
+            f"{APPOINTMENTS}calendar/events/",
+            {**query, "start": "2026-10-29T00:00:00", "end": "2026-10-30T00:00:00"},
+        )
+    assert events.status_code == 200
+
+
+def test_back_by_another_languages_return_parameter(admin_client, translated):
+    from django.utils.translation import override
+
+    ana = Professional.objects.create(name="Ana")
+    maria = Appointment.objects.create(
+        client="María",
+        professional=ana,
+        start=datetime.datetime(2026, 10, 29, 9, tzinfo=MADRID),
+        minutes=60,
+    )
+    page = reverse("admin:agenda_professional_change", args=[ana.pk])
+    with override("es"):
+        response = admin_client.post(
+            f"{reverse('admin:agenda_appointment_change', args=[maria.pk])}"
+            f"?Today={page}",
+            {
+                "client": "María",
+                "professional": ana.pk,
+                "start_0": "2026-10-29",
+                "start_1": "10:00:00",
+                "minutes": 60,
+                "status": "booked",
+            },
+        )
+    assert response.url == page
+
+
+def test_without_a_return_parameter(admin_client, monkeypatch):
+    model_admin = admin.site._registry[Appointment]
+    monkeypatch.setattr(model_admin, "calendar_return_param", None)
+    data = config(admin_client.get(f"{APPOINTMENTS}calendar/").content.decode())
+    assert data["returnParam"] is None

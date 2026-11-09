@@ -5,10 +5,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
+from django.conf import settings
 from django.forms import Media
 from django.middleware.csrf import get_token
 from django.utils import formats, timezone
-from django.utils.translation import get_language, gettext, ngettext
+from django.utils.functional import Promise
+from django.utils.translation import get_language, gettext, ngettext, override
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -17,6 +19,20 @@ if TYPE_CHECKING:
 
 #: The vendored EventCalendar 5.17.1 (its standalone build, as published).
 VENDOR = "django_ec_calendar/vendor/event-calendar"
+
+
+def translations(text: Any) -> list[str]:
+    """``text`` in each language: the active one's first, then each of
+    ``LANGUAGES``'s (once each); a plain ``str``: itself. For a name that is
+    translated (``gettext_lazy``) but must be understood in any language: a
+    link in another, a language switched (as django-admin-select-filter's
+    translated filters)."""
+    names = [str(text)]
+    if isinstance(text, Promise):
+        for code, _name in settings.LANGUAGES:
+            with override(code):
+                names.append(str(text))
+    return list(dict.fromkeys(names))
 
 
 def calendar_media() -> Media:
@@ -145,6 +161,7 @@ def calendar_config(
     url_state: bool = True,
     url_params: Mapping[str, str] | None = None,
     url_views: Mapping[str, str] | None = None,
+    url_aliases: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
     highlight_today: bool = True,
     date_picker: bool = False,
     outside_hours: str = "shade",
@@ -161,7 +178,9 @@ def calendar_config(
     a move may change it, and what it says when it may not). ``url_state``:
     whether the view and its date go in the page's URL (``ec-view``,
     ``ec-date``, or ``url_params``' names; the views by ``url_views``'), and
-    are read from it.
+    are read from it; ``url_aliases``, other names of those it reads too
+    (``{"params": {"view": […]}, "views": {"timeGridWeek": […]}}``: in other
+    languages).
     ``highlight_today``: whether today is tinted (never in a day's view).
     ``date_picker``: whether its toolbar has a date field, to go to one.
     ``move_mode``: how a drag goes (``"off"``, ``"save"``, ``"confirm"``,
@@ -187,6 +206,10 @@ def calendar_config(
         "urlState": url_state,
         "urlParams": {"view": "ec-view", "date": "ec-date", **(url_params or {})},
         "urlViews": dict(url_views or {}),
+        "urlAliases": {
+            kind: {key: list(names) for key, names in aliases.items()}
+            for kind, aliases in (url_aliases or {}).items()
+        },
         "highlightToday": highlight_today,
         "datePicker": date_picker,
         "moves": moves,
